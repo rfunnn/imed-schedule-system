@@ -63,8 +63,8 @@ export const apiService = {
     }
   },
 
-  async getAppointments(addLog: (log: ApiLog) => void, page: number = 1) {
-    const url = `/api/appointments/list?page=${page}`;
+  async getAppointments(addLog: (log: ApiLog) => void, page: number = 1, pageSize: number = 20) {
+    const url = `/api/appointments/list?page=${page}&pageSize=${pageSize}`;
     return this.fetchWithLogging(url, { method: 'GET' }, addLog);
   },
 

@@ -22,6 +22,8 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalRecords, setTotalRecords] = useState(0);
 
   const [form, setForm] = useState({
     name: '',
@@ -43,14 +45,21 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch data (The API currently returns all users, so we handle chunking locally)
-  const loadData = useCallback(async () => {
+  // Fetch data with server-side pagination
+  const loadData = useCallback(async (page: number) => {
     setFetching(true);
     try {
-      const result = await apiService.getAppointments(addLog, 1); // Get the main list
+      const result = await apiService.getAppointments(addLog, page, PAGE_SIZE);
       if (result.ok && result.data) {
-        const rawData = Array.isArray(result.data.data) ? result.data.data : (Array.isArray(result.data) ? result.data : []);
+        // Handle paginated response structure from Apps Script
+        const pagination = result.data.pagination;
+        const rawData = result.data.data || [];
         
+        if (pagination) {
+          setTotalPages(pagination.totalPages || 1);
+          setTotalRecords(pagination.total || 0);
+        }
+
         const mapped: Appointment[] = rawData.map((item: any) => ({
           id: item.id || Math.random().toString(36).substring(7),
           name: item.Name || item.name || 'Unknown',
@@ -73,24 +82,9 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
   }, [addLog, showToast]);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
-
-  // Client-side pagination logic
-  const paginatedAppointments = useMemo(() => {
-    const start = (currentPage - 1) * PAGE_SIZE;
-    const end = start + PAGE_SIZE;
-    return appointments.slice(start, end);
-  }, [appointments, currentPage]);
-
-  const totalPages = useMemo(() => {
-    return Math.max(1, Math.ceil(appointments.length / PAGE_SIZE));
-  }, [appointments]);
-
-  useEffect(() => {
-    // Scroll to top of table or top of page when changing page
+    loadData(currentPage);
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [currentPage]);
+  }, [currentPage, loadData]);
 
   const handleCreateAppointment = async () => {
     setLoading(true);
@@ -111,7 +105,8 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
       if (result.status >= 200 && result.status < 300) {
         setForm({ name: '', icNo: '', psNo: '', tcaDate: '', scheduleSupplyDate: '' });
         showToast("Success: User created successfully!", "success");
-        loadData(); // Refresh the list
+        setCurrentPage(1); // Jump to page 1 to see new user
+        loadData(1);
       } else {
         showToast("Failed: Server rejected the request.", "error");
       }
@@ -175,7 +170,7 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
       </header>
 
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Total Users" value={fetching ? "..." : String(appointments.length)} icon={UserIcon} color="bg-indigo-500" />
+        <StatCard title="Total Users" value={fetching ? "..." : String(totalRecords)} icon={UserIcon} color="bg-indigo-500" />
         <StatCard title="Today's Appointments" value={fetching ? "..." : String(appointments.filter(a => a.tcaDate === new Date().toISOString().split('T')[0]).length)} icon={CalendarIcon} color="bg-sky-500" />
         <StatCard title="Completed" value={fetching ? "..." : String(appointments.filter(a => a.status === 'COMPLETED').length)} icon={CheckIcon} color="bg-emerald-500" />
         <StatCard title="Pending" value={fetching ? "..." : String(appointments.filter(a => a.status === 'PENDING').length)} icon={WarningIcon} color="bg-amber-500" />
@@ -185,16 +180,16 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
         <div className="px-6 py-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4 bg-white/50">
           <div>
             <h2 className="text-lg font-bold text-slate-800">Patient Database</h2>
-            <p className="text-xs text-slate-500 mt-1">Showing {appointments.length} total records. Page {currentPage} of {totalPages}.</p>
+            <p className="text-xs text-slate-500 mt-1">Page {currentPage} of {totalPages} ({totalRecords} total records).</p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={loadData} disabled={fetching}>
+            <Button variant="outline" size="sm" onClick={() => loadData(currentPage)} disabled={fetching}>
               {fetching ? (
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div>
-                  Refreshing...
+                  Loading...
                 </div>
-              ) : 'Refresh Records'}
+              ) : 'Refresh Page'}
             </Button>
             <Button variant="gradient" size="sm" onClick={() => setIsAddModalOpen(true)}>+ Add Appointment</Button>
           </div>
@@ -204,7 +199,7 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
           {fetching && appointments.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64 space-y-4">
                <div className="w-10 h-10 border-4 border-sky-600 border-t-transparent rounded-full animate-spin"></div>
-               <p className="text-slate-400 text-sm font-medium">Fetching users from database...</p>
+               <p className="text-slate-400 text-sm font-medium">Fetching page data...</p>
             </div>
           ) : (
             <>
@@ -218,7 +213,7 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {paginatedAppointments.length > 0 ? paginatedAppointments.map((appt) => (
+                  {appointments.length > 0 ? appointments.map((appt) => (
                     <tr key={appt.id} className="hover:bg-sky-50/50 transition-colors cursor-pointer group" onClick={() => navigate(`/view-user/${appt.icNo}`)}>
                       <td className="px-6 py-4">
                         <div className="font-semibold text-slate-700 group-hover:text-sky-700 transition-colors">{appt.name}</div>
@@ -230,7 +225,7 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
                     </tr>
                   )) : (
                     <tr>
-                      <td colSpan={4} className="px-6 py-12 text-center text-slate-400 italic">No patients found.</td>
+                      <td colSpan={4} className="px-6 py-12 text-center text-slate-400 italic">No patients found on this page.</td>
                     </tr>
                   )}
                 </tbody>
@@ -239,7 +234,7 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
               {/* Pagination Footer */}
               <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div className="text-xs text-slate-500 font-medium">
-                  Showing records {Math.min(appointments.length, (currentPage - 1) * PAGE_SIZE + 1)} to {Math.min(appointments.length, currentPage * PAGE_SIZE)} of {appointments.length}
+                  Showing records {(currentPage - 1) * PAGE_SIZE + 1} to {Math.min(totalRecords, currentPage * PAGE_SIZE)} of {totalRecords}
                 </div>
                 
                 <div className="flex items-center gap-4">
