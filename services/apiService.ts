@@ -2,8 +2,6 @@
 import { 
   ApiLog, 
   CreateAppointmentNewUserDTO, 
-  CreateAppointmentsFromExistingDTO, 
-  DownloadFormRequestDTO 
 } from '../types.ts';
 
 export const apiService = {
@@ -66,8 +64,9 @@ export const apiService = {
   },
 
   async createNewUser(dto: CreateAppointmentNewUserDTO, addLog: (log: ApiLog) => void) {
-    // Explicitly using /api/create-user as requested
-    return this.fetchWithLogging(`/api/create-user?icNo=${dto.icNo}&action=create-new-user`, {
+    // Standardized to flat /api/create-user path
+    const url = `/api/create-user?icNo=${encodeURIComponent(dto.icNo)}&action=create-new-user`;
+    return this.fetchWithLogging(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...dto, action: 'create-new-user' }),
@@ -75,19 +74,22 @@ export const apiService = {
   },
 
   async updateUser(icNo: string, dto: any, addLog: (log: ApiLog) => void) {
-    // Explicitly using /api/create-user as requested
-    return this.fetchWithLogging(`/api/create-user?icNo=${icNo}&action=update-user`, {
+    // Standardized to flat /api/create-user path (which handles updates via action/headers)
+    const url = `/api/create-user?icNo=${encodeURIComponent(icNo)}&action=update-user`;
+    return this.fetchWithLogging(url, {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
         'X-HTTP-Method-Override': 'PATCH'
       },
-      body: JSON.stringify({ ...dto, _method: 'PATCH', action: 'update-user' }),
+      body: JSON.stringify({ ...dto, _method: 'PATCH', action: 'update-user', icNo }),
     }, addLog);
   },
 
   async getUser(icNo: string, addLog: (log: ApiLog) => void) {
-    return this.fetchWithLogging(`/api/get-user?icNo=${icNo}`, {
+    // Standardized to flat /api/get-user path
+    const url = `/api/get-user?icNo=${encodeURIComponent(icNo)}&action=get-user`;
+    return this.fetchWithLogging(url, {
       method: 'GET',
     }, addLog);
   }
