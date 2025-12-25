@@ -73,9 +73,8 @@ export const apiService = {
     }, addLog);
   },
 
-  // Added missing updateUser method for components/ViewUser.tsx
   async updateUser(icNo: string, dto: any, addLog: (log: ApiLog) => void) {
-    return this.fetchWithLogging(`/api/create-user?icNo=${icNo}`, {
+    return this.fetchWithLogging(`/api/appointments/update-user?icNo=${icNo}`, {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
@@ -102,7 +101,7 @@ export const apiService = {
   },
 
   async getUser(icNo: string, addLog: (log: ApiLog) => void) {
-    return this.fetchWithLogging(`/api/get-user?icNo=${icNo}`, {
+    return this.fetchWithLogging(`/api/appointments/get-user?icNo=${icNo}`, {
       method: 'GET',
     }, addLog);
   }

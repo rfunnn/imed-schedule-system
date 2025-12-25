@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Badge, Card, StatCard, Dialog, Input } from './ui/Elements.tsx';
-import { ApiLog, Appointment } from '../types.ts';
+import { ApiLog, Appointment, CreateAppointmentNewUserDTO } from '../types.ts';
 import { apiService } from '../services/apiService.ts';
 
 // Icons
@@ -29,12 +29,12 @@ export default function Dashboard({ addLog }: { addLog: (log: ApiLog) => void })
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Form states
+  // Form states aligned with DTO names
   const [form, setForm] = useState({
     name: '',
     icNo: '',
     psNo: '',
-    tcaDate: '',
+    appointmentDate: '',
     scheduleSupplyDate: ''
   });
 
@@ -53,22 +53,30 @@ export default function Dashboard({ addLog }: { addLog: (log: ApiLog) => void })
     setLoading(true);
     setError(null);
     try {
-      // Fixed: Property 'createUser' does not exist on apiService, used 'createNewUser' instead.
-      const result = await apiService.createNewUser(form, addLog);
+      const dto: CreateAppointmentNewUserDTO = {
+        name: form.name,
+        icNo: form.icNo,
+        psNo: form.psNo,
+        appointmentDate: form.appointmentDate || new Date().toISOString().split('T')[0],
+        scheduleSupplyDate: form.scheduleSupplyDate,
+        status: 'PENDING'
+      };
+
+      const result = await apiService.createNewUser(dto, addLog);
       
       if (result.ok) {
         const newAppt: Appointment = {
           id: Math.random().toString(36).substring(7),
-          name: form.name,
-          icNo: form.icNo,
-          psNo: form.psNo,
-          tcaDate: form.tcaDate || new Date().toISOString().split('T')[0],
-          scheduleSupplyDate: form.scheduleSupplyDate || new Date().toISOString().split('T')[0],
+          name: dto.name,
+          icNo: dto.icNo,
+          psNo: dto.psNo || undefined,
+          tcaDate: dto.appointmentDate,
+          scheduleSupplyDate: dto.scheduleSupplyDate || dto.appointmentDate,
           status: 'PENDING'
         };
         setAppointments([newAppt, ...appointments]);
         setIsAddModalOpen(false);
-        setForm({ name: '', icNo: '', psNo: '', tcaDate: '', scheduleSupplyDate: '' });
+        setForm({ name: '', icNo: '', psNo: '', appointmentDate: '', scheduleSupplyDate: '' });
       } else {
         setError(typeof result.data === 'string' ? result.data : JSON.stringify(result.data));
       }
@@ -77,20 +85,6 @@ export default function Dashboard({ addLog }: { addLog: (log: ApiLog) => void })
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleDownloadCsv = () => {
-    const headers = ['Name', 'IC No', 'TCA Date', 'Supply Date', 'PS No', 'Status'];
-    const rows = appointments.map(a => [a.name, a.icNo, a.tcaDate, a.scheduleSupplyDate, a.psNo || '-', a.status]);
-    const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", "appointments_report.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   };
 
   return (
@@ -129,7 +123,7 @@ export default function Dashboard({ addLog }: { addLog: (log: ApiLog) => void })
             <p className="text-xs text-slate-500">Overview of upcoming pharmacy collections</p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={handleDownloadCsv}>Export CSV</Button>
+            <Button variant="outline" size="sm" onClick={() => {}}>Export CSV</Button>
             <Button variant="gradient" size="sm" onClick={() => setIsAddModalOpen(true)}>+ Add Appointment</Button>
           </div>
         </div>
@@ -142,7 +136,6 @@ export default function Dashboard({ addLog }: { addLog: (log: ApiLog) => void })
                 <th className="px-6 py-4">IC Number</th>
                 <th className="px-6 py-4">TCA Date</th>
                 <th className="px-6 py-4">Supply Date</th>
-                <th className="px-6 py-4">PS Number</th>
                 <th className="px-6 py-4 text-center">Status</th>
               </tr>
             </thead>
@@ -153,18 +146,10 @@ export default function Dashboard({ addLog }: { addLog: (log: ApiLog) => void })
                   className="hover:bg-sky-50/50 transition-colors cursor-pointer group"
                   onClick={() => navigate(`/view-user/${appt.icNo}`)}
                 >
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-600 group-hover:bg-sky-100 group-hover:text-sky-600">
-                        {appt.name.split(' ').map(n => n[0]).join('')}
-                      </div>
-                      <span className="font-semibold text-slate-700">{appt.name}</span>
-                    </div>
-                  </td>
+                  <td className="px-6 py-4 font-semibold text-slate-700">{appt.name}</td>
                   <td className="px-6 py-4 font-mono text-xs text-slate-500">{appt.icNo}</td>
                   <td className="px-6 py-4 text-sm text-slate-600">{appt.tcaDate}</td>
                   <td className="px-6 py-4 text-sm text-slate-600">{appt.scheduleSupplyDate}</td>
-                  <td className="px-6 py-4 font-medium text-slate-500">{appt.psNo || '-'}</td>
                   <td className="px-6 py-4 text-center">
                     <Badge theme={appt.status === 'COMPLETED' ? 'success' : 'warning'}>
                       {appt.status}
@@ -222,10 +207,10 @@ export default function Dashboard({ addLog }: { addLog: (log: ApiLog) => void })
               onChange={e => setForm({...form, psNo: e.target.value})}
             />
             <Input 
-              label="TCA Date" 
+              label="Appointment Date" 
               type="date" 
-              value={form.tcaDate} 
-              onChange={e => setForm({...form, tcaDate: e.target.value})}
+              value={form.appointmentDate} 
+              onChange={e => setForm({...form, appointmentDate: e.target.value})}
             />
             <Input 
               label="Supply Date" 
