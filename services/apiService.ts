@@ -14,24 +14,31 @@ export const apiService = {
   ) {
     const logId = Math.random().toString(36).substring(7);
     
+    let logBody = null;
+    try {
+      logBody = options.body ? JSON.parse(options.body as string) : null;
+    } catch (e) {
+      logBody = { raw: options.body };
+    }
+
     addLog({
       id: logId + '-out',
       timestamp: new Date().toISOString(),
       method: options.method || 'GET',
       url: url,
       direction: 'OUTGOING',
-      body: options.body ? JSON.parse(options.body as string) : (options.method === 'GET' ? null : {}),
+      body: logBody,
     });
 
     try {
       const response = await fetch(url, options);
-      const contentType = response.headers.get('content-type');
+      const text = await response.text();
       let data;
       
-      if (contentType && contentType.includes('application/json')) {
-        data = await response.json();
-      } else {
-        data = await response.text();
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = text;
       }
 
       addLog({
@@ -58,50 +65,29 @@ export const apiService = {
     }
   },
 
-  async listAppointments(query: any, addLog: (log: ApiLog) => void) {
-    const params = new URLSearchParams(query).toString();
-    return this.fetchWithLogging(`/api/appointments/list?${params}`, {
-      method: 'GET',
-    }, addLog);
-  },
-
   async createNewUser(dto: CreateAppointmentNewUserDTO, addLog: (log: ApiLog) => void) {
-    return this.fetchWithLogging('/api/appointments/create-new-user', {
+    // Explicitly using /api/create-user as requested
+    return this.fetchWithLogging(`/api/create-user?icNo=${dto.icNo}&action=create-new-user`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(dto),
+      body: JSON.stringify({ ...dto, action: 'create-new-user' }),
     }, addLog);
   },
 
   async updateUser(icNo: string, dto: any, addLog: (log: ApiLog) => void) {
-    return this.fetchWithLogging(`/api/appointments/update-user?icNo=${icNo}`, {
+    // Explicitly using /api/create-user as requested
+    return this.fetchWithLogging(`/api/create-user?icNo=${icNo}&action=update-user`, {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
         'X-HTTP-Method-Override': 'PATCH'
       },
-      body: JSON.stringify(dto),
-    }, addLog);
-  },
-
-  async createFromExisting(dto: CreateAppointmentsFromExistingDTO, addLog: (log: ApiLog) => void) {
-    return this.fetchWithLogging('/api/appointments/create-from-existing', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(dto),
-    }, addLog);
-  },
-
-  async downloadForm(dto: DownloadFormRequestDTO, addLog: (log: ApiLog) => void) {
-    return this.fetchWithLogging('/api/appointments/download-form', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(dto),
+      body: JSON.stringify({ ...dto, _method: 'PATCH', action: 'update-user' }),
     }, addLog);
   },
 
   async getUser(icNo: string, addLog: (log: ApiLog) => void) {
-    return this.fetchWithLogging(`/api/appointments/get-user?icNo=${icNo}`, {
+    return this.fetchWithLogging(`/api/get-user?icNo=${icNo}`, {
       method: 'GET',
     }, addLog);
   }

@@ -1,33 +1,32 @@
 
-const EXTERNAL_URL = 'https://script.google.com/macros/s/AKfycbw9Fh4OCD99Q1PpLGe0JZnGTHA7aVA3Io_MdnxbQHOpsNSQbTXixYtOCYOn0YgjKCcos/exec';
+const EXTERNAL_URL = 'https://script.google.com/macros/s/AKfycbw9Fh4OCD99Q1PpLGe0JZnGTHA7aVA3IoMdnxbQHOpsNSQbTXixYtOCYOn0YgjKCcos/exec';
 
 export default async function handler(req: any, res: any) {
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  // CORS Headers
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,POST,PUT');
-  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, X-HTTP-Method-Override');
+  res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-HTTP-Method-Override');
 
   if (req.method === 'OPTIONS') {
-    res.status(204).end();
-    return;
+    return res.status(204).end();
   }
 
   try {
-    const { icNo } = req.query;
+    const body = req.body || {};
+    // Extract icNo and action from body or query for forwarding
+    const icNo = req.query.icNo || body.icNo;
+    const action = req.query.action || body.action || (req.headers['x-http-method-override'] === 'PATCH' ? 'update-user' : 'create-new-user');
+    
     const apiKey = process.env.API_KEY;
     
-    let forwardedUrl = EXTERNAL_URL;
     const params = new URLSearchParams();
-    if (icNo) params.append('icNo', icNo as string);
+    if (icNo) params.append('icNo', String(icNo));
+    if (action) params.append('action', String(action));
     if (apiKey) params.append('key', apiKey);
     
-    const queryString = params.toString();
-    if (queryString) {
-      forwardedUrl = `${EXTERNAL_URL}?${queryString}`;
-    }
+    const forwardedUrl = `${EXTERNAL_URL}?${params.toString()}`;
 
     const headerOverride = req.headers['x-http-method-override'];
-    const body = req.body;
     const wantsPatch = (headerOverride && headerOverride.toUpperCase() === 'PATCH') || (body && body._method === 'PATCH');
 
     const forwardHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -41,13 +40,16 @@ export default async function handler(req: any, res: any) {
 
     const text = await response.text();
     
+    // Attempt to parse response as JSON, otherwise return text
     try {
       const data = JSON.parse(text);
-      res.status(response.status).json(data);
+      res.status(response.status || 200).json(data);
     } catch {
-      res.status(response.status).send(text);
+      // If the response is not JSON (like a Google error page), send as text
+      res.status(response.status || 200).send(text);
     }
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error('[Proxy Error]:', error);
+    res.status(500).json({ success: false, message: error.message });
   }
 }

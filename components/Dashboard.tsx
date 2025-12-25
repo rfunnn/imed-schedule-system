@@ -5,8 +5,7 @@ import { Button, Badge, Card, StatCard, Dialog, Input } from './ui/Elements.tsx'
 import { ApiLog, Appointment, CreateAppointmentNewUserDTO } from '../types.ts';
 import { apiService } from '../services/apiService.ts';
 
-// Icons
-const CalendarIcon = (props: any) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2-2v12a2 2 0 002 2z" /></svg>;
+const CalendarIcon = (props: any) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>;
 const CheckIcon = (props: any) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
 const UserIcon = (props: any) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>;
 const WarningIcon = (props: any) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>;
@@ -14,9 +13,6 @@ const WarningIcon = (props: any) => <svg {...props} fill="none" stroke="currentC
 const initialAppointments: Appointment[] = [
   { id: '1', name: 'Ali Bin Ahmad', icNo: '950212015431', tcaDate: '2023-11-20', scheduleSupplyDate: '2023-11-27', psNo: 'MS-55001', status: 'PENDING' },
   { id: '2', name: 'Siti Nurhaliza', icNo: '880504105222', tcaDate: '2023-11-21', scheduleSupplyDate: '2023-11-28', psNo: 'MS-55002', status: 'COMPLETED' },
-  { id: '3', name: 'John Doe', icNo: '900101149999', tcaDate: '2023-11-22', scheduleSupplyDate: '2023-11-29', psNo: 'MS-55003', status: 'PENDING' },
-  { id: '4', name: 'Lina Tan', icNo: '921230055110', tcaDate: '2023-11-23', scheduleSupplyDate: '2023-11-30', psNo: 'MS-55004', status: 'PENDING' },
-  { id: '5', name: 'Kumar Raj', icNo: '850707106331', tcaDate: '2023-11-24', scheduleSupplyDate: '2023-12-01', psNo: 'MS-55005', status: 'COMPLETED' },
 ];
 
 export default function Dashboard({ addLog }: { addLog: (log: ApiLog) => void }) {
@@ -52,13 +48,11 @@ export default function Dashboard({ addLog }: { addLog: (log: ApiLog) => void })
     setLoading(true);
     setError(null);
     try {
-      // Clean IC No - get digits only
-      const cleanIc = form.icNo.replace(/\D/g, '');
+      const cleanIc = form.icNo.trim();
       
-      const dto: any = {
+      const dto: CreateAppointmentNewUserDTO = {
         name: form.name.trim() || 'New Patient',
-        // Send as number if valid, otherwise string - matching original code intent
-        icNo: /^\d+$/.test(cleanIc) ? Number(cleanIc) : cleanIc,
+        icNo: cleanIc,
         psNo: form.psNo.trim() || null,
         tcaDate: form.tcaDate || new Date().toISOString().split('T')[0],
         scheduleSupplyDate: form.scheduleSupplyDate || form.tcaDate || new Date().toISOString().split('T')[0],
@@ -67,30 +61,28 @@ export default function Dashboard({ addLog }: { addLog: (log: ApiLog) => void })
 
       const result = await apiService.createNewUser(dto, addLog);
       
-      // Detailed response checking
-      const responseData = result.data;
-      const isSuccess = result.ok && (responseData?.success === true || responseData?.status === 'success' || (typeof responseData === 'object' && !responseData.error && !responseData.message?.toLowerCase().includes('exist')));
+      const data = result.data;
+      // Many Google Scripts return success as a boolean or string inside the object
+      const isSuccess = result.ok && (data?.success === true || data?.status === 'success' || (typeof data === 'object' && !data.error && !data.message?.toLowerCase().includes('exist')));
 
       if (isSuccess) {
         const newAppt: Appointment = {
           id: Math.random().toString(36).substring(7),
           name: dto.name,
-          icNo: String(dto.icNo),
+          icNo: dto.icNo,
           psNo: dto.psNo || undefined,
           tcaDate: dto.tcaDate,
-          scheduleSupplyDate: dto.scheduleSupplyDate,
+          scheduleSupplyDate: dto.scheduleSupplyDate || dto.tcaDate,
           status: 'PENDING'
         };
         setAppointments([newAppt, ...appointments]);
         setIsAddModalOpen(false);
         setForm({ name: '', icNo: '', psNo: '', tcaDate: '', scheduleSupplyDate: '' });
       } else {
-        // Capture specific error message from Google Script
-        const errorMsg = responseData?.message || responseData?.error || "The record was not saved. Please check if the IC already exists.";
-        setError(errorMsg);
+        setError(data?.message || data?.error || "The server rejected the request. Please check logs.");
       }
     } catch (err) {
-      setError("Network or proxy error. Please check the system logs at the bottom of the screen.");
+      setError("Communication failed. The API might be unreachable.");
     } finally {
       setLoading(false);
     }
@@ -100,9 +92,7 @@ export default function Dashboard({ addLog }: { addLog: (log: ApiLog) => void })
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8">
       <header className="flex flex-col md:flex-row items-center justify-between border-b border-slate-200 pb-6 gap-4">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-sky-600 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg">
-            iM
-          </div>
+          <div className="w-12 h-12 bg-sky-600 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg">iM</div>
           <div>
             <h1 className="text-xl font-bold text-slate-800">iMED Schedule System</h1>
             <p className="text-sm text-slate-500 font-medium">Pharmacy Appointment Manager</p>
@@ -126,10 +116,9 @@ export default function Dashboard({ addLog }: { addLog: (log: ApiLog) => void })
         <div className="px-6 py-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4 bg-white/50">
           <div>
             <h2 className="text-lg font-bold text-slate-800">Recent Appointments</h2>
-            <p className="text-xs text-slate-500">Overview of upcoming pharmacy collections</p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => {}}>Export CSV</Button>
+            <Button variant="outline" size="sm">Export CSV</Button>
             <Button variant="gradient" size="sm" onClick={() => setIsAddModalOpen(true)}>+ Add Appointment</Button>
           </div>
         </div>
@@ -141,26 +130,16 @@ export default function Dashboard({ addLog }: { addLog: (log: ApiLog) => void })
                 <th className="px-6 py-4">Patient Name</th>
                 <th className="px-6 py-4">IC Number</th>
                 <th className="px-6 py-4">TCA Date</th>
-                <th className="px-6 py-4">Supply Date</th>
                 <th className="px-6 py-4 text-center">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {appointments.map((appt) => (
-                <tr 
-                  key={appt.id} 
-                  className="hover:bg-sky-50/50 transition-colors cursor-pointer group"
-                  onClick={() => navigate(`/view-user/${appt.icNo}`)}
-                >
+                <tr key={appt.id} className="hover:bg-sky-50 transition-colors cursor-pointer" onClick={() => navigate(`/view-user/${appt.icNo}`)}>
                   <td className="px-6 py-4 font-semibold text-slate-700">{appt.name}</td>
                   <td className="px-6 py-4 font-mono text-xs text-slate-500">{appt.icNo}</td>
                   <td className="px-6 py-4 text-sm text-slate-600">{appt.tcaDate}</td>
-                  <td className="px-6 py-4 text-sm text-slate-600">{appt.scheduleSupplyDate}</td>
-                  <td className="px-6 py-4 text-center">
-                    <Badge theme={appt.status === 'COMPLETED' ? 'success' : 'warning'}>
-                      {appt.status}
-                    </Badge>
-                  </td>
+                  <td className="px-6 py-4 text-center"><Badge theme={appt.status === 'COMPLETED' ? 'success' : 'warning'}>{appt.status}</Badge></td>
                 </tr>
               ))}
             </tbody>
@@ -168,78 +147,26 @@ export default function Dashboard({ addLog }: { addLog: (log: ApiLog) => void })
         </div>
       </Card>
 
-      <Dialog 
-        open={isAddModalOpen} 
-        onClose={() => setIsAddModalOpen(false)} 
-        title="Create New Appointment"
-        size="md"
-      >
-        <div className="space-y-6">
-          <div className="flex border-b">
-            <button 
-              className={`px-4 py-2 text-sm font-bold ${addTab === 'existing' ? 'text-sky-600 border-b-2 border-sky-600' : 'text-slate-400'}`}
-              onClick={() => setAddTab('existing')}
-            >
-              Existing User
-            </button>
-            <button 
-              className={`px-4 py-2 text-sm font-bold ${addTab === 'new' ? 'text-sky-600 border-b-2 border-sky-600' : 'text-slate-400'}`}
-              onClick={() => setAddTab('new')}
-            >
-              New User
-            </button>
+      <Dialog open={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} title="New Appointment" size="md">
+        <div className="space-y-4">
+          <div className="flex border-b mb-4">
+            <button className={`px-4 py-2 text-sm font-bold ${addTab === 'existing' ? 'text-sky-600 border-b-2 border-sky-600' : 'text-slate-400'}`} onClick={() => setAddTab('existing')}>Existing</button>
+            <button className={`px-4 py-2 text-sm font-bold ${addTab === 'new' ? 'text-sky-600 border-b-2 border-sky-600' : 'text-slate-400'}`} onClick={() => setAddTab('new')}>New User</button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {addTab === 'new' && (
-              <Input 
-                label="Full Name" 
-                placeholder="Patient's Full Name" 
-                value={form.name} 
-                onChange={e => setForm({...form, name: e.target.value})}
-              />
-            )}
-            <Input 
-              label="IC Number" 
-              placeholder="e.g. 950101101234" 
-              value={form.icNo} 
-              onChange={e => setForm({...form, icNo: e.target.value})}
-            />
-            <Input 
-              label="PS Number" 
-              placeholder="e.g. MS-12345" 
-              value={form.psNo} 
-              onChange={e => setForm({...form, psNo: e.target.value})}
-            />
-            <Input 
-              label="TCA Date" 
-              type="date" 
-              value={form.tcaDate} 
-              onChange={e => setForm({...form, tcaDate: e.target.value})}
-            />
-            <Input 
-              label="Supply Date" 
-              type="date" 
-              value={form.scheduleSupplyDate} 
-              onChange={e => setForm({...form, scheduleSupplyDate: e.target.value})}
-            />
+            {addTab === 'new' && <Input label="Full Name" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />}
+            <Input label="IC Number" value={form.icNo} onChange={e => setForm({...form, icNo: e.target.value})} />
+            <Input label="PS Number" value={form.psNo} onChange={e => setForm({...form, psNo: e.target.value})} />
+            <Input label="TCA Date" type="date" value={form.tcaDate} onChange={e => setForm({...form, tcaDate: e.target.value})} />
+            <Input label="Supply Date" type="date" value={form.scheduleSupplyDate} onChange={e => setForm({...form, scheduleSupplyDate: e.target.value})} />
           </div>
 
-          {error && (
-            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-600 text-[11px] font-bold shadow-sm leading-relaxed">
-              <span className="mr-2">❌</span> {error}
-            </div>
-          )}
+          {error && <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-600 text-[11px] font-bold shadow-sm">⚠️ {error}</div>}
 
           <div className="flex justify-end gap-3 pt-4">
             <Button variant="flat" onClick={() => setIsAddModalOpen(false)}>Cancel</Button>
-            <Button 
-              variant="gradient" 
-              onClick={handleCreateAppointment}
-              disabled={loading || !form.icNo}
-            >
-              {loading ? 'Transmitting...' : (addTab === 'new' ? 'Create & Add' : 'Add Appointment')}
-            </Button>
+            <Button variant="gradient" onClick={handleCreateAppointment} disabled={loading || !form.icNo}>{loading ? 'Saving...' : 'Confirm'}</Button>
           </div>
         </div>
       </Dialog>
