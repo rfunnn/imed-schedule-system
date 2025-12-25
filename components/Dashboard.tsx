@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Badge, Card, StatCard, Dialog, Input } from './ui/Elements.tsx';
 import { ApiLog, Appointment, CreateAppointmentNewUserDTO } from '../types.ts';
@@ -10,6 +10,8 @@ const CheckIcon = (props: any) => <svg {...props} fill="none" stroke="currentCol
 const UserIcon = (props: any) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>;
 const WarningIcon = (props: any) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>;
 
+const PAGE_SIZE = 50;
+
 export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog) => void; showToast: (msg: string, type: 'success' | 'error') => void }) {
   const navigate = useNavigate();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -19,6 +21,8 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
   const [malaysiaDate, setMalaysiaDate] = useState('');
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
 
   const [form, setForm] = useState({
     name: '',
@@ -40,11 +44,11 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch initial data (All Users)
-  const loadData = async () => {
+  // Fetch initial data (All Users with Pagination)
+  const loadData = useCallback(async (page: number) => {
     setFetching(true);
     try {
-      const result = await apiService.getAppointments(addLog);
+      const result = await apiService.getAppointments(addLog, page);
       if (result.ok && result.data) {
         // Handle both direct array responses and object-wrapped data
         const rawData = Array.isArray(result.data.data) ? result.data.data : (Array.isArray(result.data) ? result.data : []);
@@ -53,12 +57,15 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
           id: item.id || Math.random().toString(36).substring(7),
           name: item.Name || item.name || 'Unknown',
           icNo: String(item.IC || item.icNo || ''),
-          psNo: item['PS NO'] || item.psNo,
+          psNo: item.psNo || item['PS NO'],
           tcaDate: item.tcaDate || item['TCA Date'] || '',
           scheduleSupplyDate: item.scheduleSupplyDate || item['Supply Date'] || '',
           status: (item.status || 'PENDING') as any
         }));
         setAppointments(mapped);
+        
+        // If we received exactly PAGE_SIZE items, assume there might be more
+        setHasMore(mapped.length === PAGE_SIZE);
       } else {
         showToast("Notice: No live data found.", "error");
       }
@@ -68,11 +75,11 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
     } finally {
       setFetching(false);
     }
-  };
+  }, [addLog, showToast]);
 
   useEffect(() => {
-    loadData();
-  }, []);
+    loadData(currentPage);
+  }, [currentPage, loadData]);
 
   const handleCreateAppointment = async () => {
     setLoading(true);
@@ -95,8 +102,12 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
       if (result.status >= 200 && result.status < 300) {
         setForm({ name: '', icNo: '', psNo: '', tcaDate: '', scheduleSupplyDate: '' });
         showToast("Success: User created successfully!", "success");
-        // Refresh full list after successful creation
-        loadData();
+        // Reset to first page and refresh full list after successful creation
+        if (currentPage === 1) {
+          loadData(1);
+        } else {
+          setCurrentPage(1);
+        }
       } else {
         showToast("Failed: Server rejected the request.", "error");
       }
@@ -104,6 +115,18 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
       showToast("Error: API Connection failed.", "error");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleNextPage = () => {
+    if (hasMore && !fetching) {
+      setCurrentPage(prev => prev + 1);
+    }
+  };
+
+  const handlePrevPage = () => {
+    if (currentPage > 1 && !fetching) {
+      setCurrentPage(prev => prev - 1);
     }
   };
 
@@ -125,7 +148,7 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
       </header>
 
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Total Users" value={fetching ? "..." : String(appointments.length)} icon={UserIcon} color="bg-indigo-500" delta={appointments.length > 0 ? `+${appointments.length}` : '0'} />
+        <StatCard title="Users (Current Page)" value={fetching ? "..." : String(appointments.length)} icon={UserIcon} color="bg-indigo-500" />
         <StatCard title="Today's Appointments" value={fetching ? "..." : String(appointments.filter(a => a.tcaDate === new Date().toISOString().split('T')[0]).length)} icon={CalendarIcon} color="bg-sky-500" />
         <StatCard title="Completed" value={fetching ? "..." : String(appointments.filter(a => a.status === 'COMPLETED').length)} icon={CheckIcon} color="bg-emerald-500" />
         <StatCard title="Pending" value={fetching ? "..." : String(appointments.filter(a => a.status === 'PENDING').length)} icon={WarningIcon} color="bg-amber-500" />
@@ -135,16 +158,16 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
         <div className="px-6 py-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4 bg-white/50">
           <div>
             <h2 className="text-lg font-bold text-slate-800">Patient Database</h2>
-            <p className="text-xs text-slate-500 mt-1">Listing all registered users and their last appointment status.</p>
+            <p className="text-xs text-slate-500 mt-1">Page {currentPage} - Listing users and their last appointment status.</p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={loadData} disabled={fetching}>
+            <Button variant="outline" size="sm" onClick={() => loadData(currentPage)} disabled={fetching}>
               {fetching ? (
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div>
                   Refreshing...
                 </div>
-              ) : 'Refresh List'}
+              ) : 'Refresh Page'}
             </Button>
             <Button variant="gradient" size="sm" onClick={() => setIsAddModalOpen(true)}>+ Add Appointment</Button>
           </div>
@@ -157,33 +180,60 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
                <p className="text-slate-400 text-sm font-medium">Fetching users from database...</p>
             </div>
           ) : (
-            <table className="w-full text-left">
-              <thead>
-                <tr className="bg-slate-50 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                  <th className="px-6 py-4">Patient Name</th>
-                  <th className="px-6 py-4">IC Number</th>
-                  <th className="px-6 py-4">TCA Date</th>
-                  <th className="px-6 py-4 text-center">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {appointments.length > 0 ? appointments.map((appt) => (
-                  <tr key={appt.id} className="hover:bg-sky-50/50 transition-colors cursor-pointer group" onClick={() => navigate(`/view-user/${appt.icNo}`)}>
-                    <td className="px-6 py-4">
-                      <div className="font-semibold text-slate-700 group-hover:text-sky-700 transition-colors">{appt.name}</div>
-                      {appt.psNo && <div className="text-[10px] text-slate-400 font-mono">#{appt.psNo}</div>}
-                    </td>
-                    <td className="px-6 py-4 font-mono text-xs text-slate-500">{appt.icNo}</td>
-                    <td className="px-6 py-4 text-sm text-slate-600">{appt.tcaDate || 'N/A'}</td>
-                    <td className="px-6 py-4 text-center"><Badge theme={appt.status === 'COMPLETED' ? 'success' : 'warning'}>{appt.status || 'PENDING'}</Badge></td>
+            <>
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-slate-50 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    <th className="px-6 py-4">Patient Name</th>
+                    <th className="px-6 py-4">IC Number</th>
+                    <th className="px-6 py-4">TCA Date</th>
+                    <th className="px-6 py-4 text-center">Status</th>
                   </tr>
-                )) : (
-                  <tr>
-                    <td colSpan={4} className="px-6 py-12 text-center text-slate-400 italic">No patients found in the database.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {appointments.length > 0 ? appointments.map((appt) => (
+                    <tr key={appt.id} className="hover:bg-sky-50/50 transition-colors cursor-pointer group" onClick={() => navigate(`/view-user/${appt.icNo}`)}>
+                      <td className="px-6 py-4">
+                        <div className="font-semibold text-slate-700 group-hover:text-sky-700 transition-colors">{appt.name}</div>
+                        {appt.psNo && <div className="text-[10px] text-slate-400 font-mono">#{appt.psNo}</div>}
+                      </td>
+                      <td className="px-6 py-4 font-mono text-xs text-slate-500">{appt.icNo}</td>
+                      <td className="px-6 py-4 text-sm text-slate-600">{appt.tcaDate || 'N/A'}</td>
+                      <td className="px-6 py-4 text-center"><Badge theme={appt.status === 'COMPLETED' ? 'success' : 'warning'}>{appt.status || 'PENDING'}</Badge></td>
+                    </tr>
+                  )) : (
+                    <tr>
+                      <td colSpan={4} className="px-6 py-12 text-center text-slate-400 italic">No patients found in this batch.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+
+              {/* Pagination Footer */}
+              <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
+                <div className="text-xs text-slate-500 font-medium">
+                  Showing {appointments.length} patients on page {currentPage}
+                </div>
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={handlePrevPage} 
+                    disabled={currentPage === 1 || fetching}
+                  >
+                    Previous
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={handleNextPage} 
+                    disabled={!hasMore || fetching}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            </>
           )}
         </div>
       </Card>
