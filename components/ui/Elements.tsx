@@ -1,5 +1,4 @@
-
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'base' | 'gradient' | 'error' | 'outline' | 'flat';
@@ -68,6 +67,82 @@ export const Input: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { lab
     />
   </div>
 );
+
+export const SearchableSelect: React.FC<{
+  label?: string;
+  placeholder?: string;
+  options: Array<{ label: string; value: any }>;
+  onSearch: (query: string) => void;
+  onChange: (value: any) => void;
+  loading?: boolean;
+}> = ({ label, placeholder, options, onSearch, onChange, loading }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  return (
+    <div className="w-full relative" ref={containerRef}>
+      {label && <label className="block text-xs font-semibold text-slate-500 mb-1">{label}</label>}
+      <div 
+        className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm cursor-pointer flex justify-between items-center"
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <span className={search ? 'text-slate-800' : 'text-slate-400'}>
+          {search || placeholder || 'Select patient...'}
+        </span>
+        <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+      </div>
+
+      {isOpen && (
+        <div className="absolute z-[110] top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-xl overflow-hidden">
+          <div className="p-2 border-b bg-slate-50">
+            <input 
+              autoFocus
+              className="w-full bg-white border border-slate-200 rounded-md px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-sky-500"
+              placeholder="Type to search..."
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                onSearch(e.target.value);
+              }}
+            />
+          </div>
+          <div className="max-h-48 overflow-auto">
+            {loading ? (
+              <div className="p-4 text-center text-xs text-slate-400 italic">Searching database...</div>
+            ) : options.length > 0 ? (
+              options.map((opt, i) => (
+                <div 
+                  key={i}
+                  className="px-4 py-2 text-sm hover:bg-sky-50 cursor-pointer transition-colors border-b last:border-0"
+                  onClick={() => {
+                    onChange(opt.value);
+                    setSearch(opt.label);
+                    setIsOpen(false);
+                  }}
+                >
+                  {opt.label}
+                </div>
+              ))
+            ) : (
+              <div className="p-4 text-center text-xs text-slate-400 italic">No records found</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 export const Dialog: React.FC<{ open: boolean, onClose: () => void, title: string, children: React.ReactNode, size?: 'sm' | 'md' | 'lg' }> = ({ 
   open, onClose, title, children, size = 'md' 

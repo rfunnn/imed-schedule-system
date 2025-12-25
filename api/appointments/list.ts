@@ -6,14 +6,11 @@ export default async function handler(req: any, res: any) {
   if (req.method !== 'GET') return res.status(405).end();
   
   try {
-    const apiKey = process.env.API_KEY;
     const params = new URLSearchParams();
-    if (apiKey) params.append('key', apiKey);
     params.append('action', 'list');
 
-    // Add any other query params passed from the frontend
     Object.entries(req.query).forEach(([key, value]) => {
-      if (key !== 'action' && key !== 'key') {
+      if (key !== 'action') {
         params.append(key, String(value));
       }
     });

@@ -5,11 +5,8 @@ export default async function handler(req: any, res: any) {
   
   try {
     const { icNo } = req.query;
-    const apiKey = process.env.API_KEY;
-    
     const params = new URLSearchParams();
     if (icNo) params.append('icNo', icNo as string);
-    if (apiKey) params.append('key', apiKey);
     params.append('action', 'update-user');
 
     const response = await fetch(`${EXTERNAL_URL}?${params.toString()}`, {

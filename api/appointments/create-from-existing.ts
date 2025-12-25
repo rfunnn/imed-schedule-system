@@ -4,9 +4,7 @@ export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') return res.status(405).end();
   
   try {
-    const apiKey = process.env.API_KEY;
     const params = new URLSearchParams();
-    if (apiKey) params.append('key', apiKey);
     params.append('action', 'create-from-existing');
 
     const response = await fetch(`${EXTERNAL_URL}?${params.toString()}`, {

@@ -14,7 +14,6 @@ export default async function handler(req: any, res: any) {
     const icNo = req.query.icNo || body.icNo;
     const headerOverride = req.headers['x-http-method-override'];
     
-    // Determine action: prioritize explicit action, then header override, then default to create
     let action = req.query.action || body.action;
     if (!action) {
       if (headerOverride?.toUpperCase() === 'PATCH' || body._method === 'PATCH') {
@@ -24,11 +23,9 @@ export default async function handler(req: any, res: any) {
       }
     }
     
-    const apiKey = process.env.API_KEY;
     const params = new URLSearchParams();
     if (icNo) params.append('icNo', String(icNo));
     if (action) params.append('action', String(action));
-    if (apiKey) params.append('key', apiKey);
     
     const forwardedUrl = `${EXTERNAL_URL}?${params.toString()}`;
 

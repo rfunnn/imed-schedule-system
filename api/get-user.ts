@@ -1,14 +1,11 @@
 const EXTERNAL_URL = 'https://script.google.com/macros/s/AKfycbxaOJydyTkze3rYZ3s-5ta_Mg79bfGMXOEenruRl2E2wgh6SSI0tK_qWcc7HB6JqK0d/exec';
 
 export default async function handler(req: any, res: any) {
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,POST,PUT');
-  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
 
   if (req.method === 'OPTIONS') {
-    res.status(204).end();
-    return;
+    return res.status(204).end();
   }
 
   try {
@@ -17,11 +14,9 @@ export default async function handler(req: any, res: any) {
       return res.status(400).json({ error: 'icNo parameter is required' });
     }
 
-    const apiKey = process.env.API_KEY;
     const params = new URLSearchParams();
     params.append('icNo', icNo as string);
     params.append('action', 'get-user');
-    if (apiKey) params.append('key', apiKey);
 
     const forwardedUrl = `${EXTERNAL_URL}?${params.toString()}`;
 

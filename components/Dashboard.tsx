@@ -1,7 +1,6 @@
-
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button, Badge, Card, StatCard, Dialog, Input } from './ui/Elements.tsx';
+import { Button, Badge, Card, StatCard, Dialog, Input, SearchableSelect } from './ui/Elements.tsx';
 import { ApiLog, Appointment, CreateAppointmentNewUserDTO } from '../types.ts';
 import { apiService } from '../services/apiService.ts';
 
@@ -25,6 +24,11 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
   const [totalPages, setTotalPages] = useState(1);
   const [totalRecords, setTotalRecords] = useState(0);
 
+  // Lookup state
+  const [searchOptions, setSearchOptions] = useState<Array<{ label: string; value: any }>>([]);
+  const [searchingUser, setSearchingUser] = useState(false);
+  const searchTimeoutRef = useRef<number | null>(null);
+
   const [form, setForm] = useState({
     name: '',
     icNo: '',
@@ -33,7 +37,6 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
     scheduleSupplyDate: ''
   });
 
-  // Malaysia Time update
   useEffect(() => {
     const updateTime = () => {
       const now = new Date();
@@ -45,13 +48,11 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch data with server-side pagination
   const loadData = useCallback(async (page: number) => {
     setFetching(true);
     try {
       const result = await apiService.getAppointments(addLog, page, PAGE_SIZE);
       if (result.ok && result.data) {
-        // Handle paginated response structure from Apps Script
         const pagination = result.data.pagination;
         const rawData = result.data.data || [];
         
@@ -70,8 +71,6 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
           status: (item.status || 'PENDING') as any
         }));
         setAppointments(mapped);
-      } else {
-        showToast("Notice: No live data found.", "error");
       }
     } catch (err) {
       console.error('Fetch error:', err);
@@ -83,221 +82,193 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
 
   useEffect(() => {
     loadData(currentPage);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [currentPage, loadData]);
+
+  const handleSearchUser = (query: string) => {
+    if (query.length < 3) return;
+    if (searchTimeoutRef.current) window.clearTimeout(searchTimeoutRef.current);
+    
+    setSearchingUser(true);
+    searchTimeoutRef.current = window.setTimeout(async () => {
+      try {
+        const res = await apiService.getUser(query, addLog);
+        if (res.ok && res.data && (res.data.success || res.status === 200)) {
+          const d = res.data.data || res.data;
+          setSearchOptions([{ 
+            label: `${d.IC || d.icNo} — ${d.Name || d.name}`, 
+            value: { name: d.Name || d.name, icNo: d.IC || d.icNo, psNo: d['PS NO'] || d.psNo } 
+          }]);
+        } else {
+          setSearchOptions([]);
+        }
+      } catch {
+        setSearchOptions([]);
+      } finally {
+        setSearchingUser(false);
+      }
+    }, 500);
+  };
 
   const handleCreateAppointment = async () => {
     setLoading(true);
     try {
       const cleanIc = form.icNo.trim();
-      const dto: CreateAppointmentNewUserDTO = {
-        name: form.name.trim() || 'New Patient',
-        icNo: cleanIc,
-        psNo: form.psNo.trim() || null,
-        tcaDate: form.tcaDate || new Date().toISOString().split('T')[0],
-        scheduleSupplyDate: form.scheduleSupplyDate || form.tcaDate || new Date().toISOString().split('T')[0],
-        status: 'PENDING'
-      };
+      let result;
 
-      setIsAddModalOpen(false);
-      const result = await apiService.createNewUser(dto, addLog);
+      if (addTab === 'existing') {
+        result = await apiService.updateUser(cleanIc, {
+          tcaDate: form.tcaDate,
+          scheduleSupplyDate: form.scheduleSupplyDate,
+          status: 'PENDING'
+        }, addLog);
+      } else {
+        const dto: CreateAppointmentNewUserDTO = {
+          name: form.name.trim() || 'New Patient',
+          icNo: cleanIc,
+          psNo: form.psNo.trim() || null,
+          tcaDate: form.tcaDate || new Date().toISOString().split('T')[0],
+          scheduleSupplyDate: form.scheduleSupplyDate || form.tcaDate || new Date().toISOString().split('T')[0],
+          status: 'PENDING'
+        };
+        result = await apiService.createNewUser(dto, addLog);
+      }
       
       if (result.status >= 200 && result.status < 300) {
         setForm({ name: '', icNo: '', psNo: '', tcaDate: '', scheduleSupplyDate: '' });
-        showToast("Success: User created successfully!", "success");
-        setCurrentPage(1); // Jump to page 1 to see new user
+        showToast(`Success: Appointment processed!`, "success");
+        setIsAddModalOpen(false);
+        setCurrentPage(1);
         loadData(1);
       } else {
-        showToast("Failed: Server rejected the request.", "error");
+        showToast("Server rejected the request.", "error");
       }
     } catch (err) {
-      showToast("Error: API Connection failed.", "error");
+      showToast("API Connection failed.", "error");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleNextPage = () => {
-    if (currentPage < totalPages && !fetching) {
-      setCurrentPage(prev => prev + 1);
-    }
-  };
-
-  const handlePrevPage = () => {
-    if (currentPage > 1 && !fetching) {
-      setCurrentPage(prev => prev - 1);
-    }
-  };
-
-  const handlePageClick = (page: number) => {
-    if (!fetching && page !== currentPage) {
-      setCurrentPage(page);
-    }
-  };
-
-  // Generate page numbers to display
-  const pageNumbers = useMemo(() => {
-    const pages = [];
-    const maxVisiblePages = 5;
-    let start = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
-    let end = Math.min(totalPages, start + maxVisiblePages - 1);
-    
-    if (end - start + 1 < maxVisiblePages) {
-      start = Math.max(1, end - maxVisiblePages + 1);
-    }
-
-    for (let i = start; i <= end; i++) {
-      pages.push(i);
-    }
-    return pages;
-  }, [currentPage, totalPages]);
-
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8">
-      <header className="flex flex-col md:flex-row items-center justify-between border-b border-slate-200 pb-6 gap-4">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-sky-600 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg">iM</div>
+      <header className="flex flex-col md:flex-row items-center justify-between border-b border-slate-200 pb-6 gap-4 bg-white/40 p-6 rounded-2xl shadow-sm backdrop-blur-md">
+        <div className="flex items-center gap-5">
+          <div className="w-16 h-16 bg-sky-600 rounded-2xl flex items-center justify-center text-white font-black text-2xl shadow-xl">iM</div>
           <div>
-            <h1 className="text-xl font-bold text-slate-800">iMED Schedule System</h1>
-            <p className="text-sm text-slate-500 font-medium">Pharmacy Appointment Manager</p>
+            <h1 className="text-2xl font-black text-slate-800 tracking-tight">iMED Schedule System</h1>
+            <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Pharmacy Control Center</p>
           </div>
         </div>
-        <div className="text-right">
-          <p className="text-sm font-semibold text-slate-600">{malaysiaDate}</p>
-          <p className="text-2xl font-black text-slate-900">{malaysiaTime}</p>
-          <p className="text-[10px] font-bold text-slate-400 tracking-widest uppercase">Malaysia Time (GMT+8)</p>
+        <div className="text-right p-4 bg-white/60 rounded-xl border border-white/40 shadow-inner">
+          <p className="text-sm font-bold text-slate-400 uppercase">{malaysiaDate}</p>
+          <p className="text-3xl font-black text-slate-900 font-mono">{malaysiaTime}</p>
+          <p className="text-[10px] font-black text-sky-600 tracking-widest uppercase mt-1">Malaysia (GMT+8)</p>
         </div>
       </header>
 
-      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Total Users" value={fetching ? "..." : String(totalRecords)} icon={UserIcon} color="bg-indigo-500" />
-        <StatCard title="Today's Appointments" value={fetching ? "..." : String(appointments.filter(a => a.tcaDate === new Date().toISOString().split('T')[0]).length)} icon={CalendarIcon} color="bg-sky-500" />
-        <StatCard title="Completed" value={fetching ? "..." : String(appointments.filter(a => a.status === 'COMPLETED').length)} icon={CheckIcon} color="bg-emerald-500" />
-        <StatCard title="Pending" value={fetching ? "..." : String(appointments.filter(a => a.status === 'PENDING').length)} icon={WarningIcon} color="bg-amber-500" />
+      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <StatCard title="Total Patients" value={fetching ? "..." : String(totalRecords)} icon={UserIcon} color="bg-indigo-600" />
+        <StatCard title="Pending Review" value={fetching ? "..." : String(appointments.filter(a => a.status === 'PENDING').length)} icon={WarningIcon} color="bg-amber-500" />
+        <StatCard title="Today's Supply" value={fetching ? "..." : String(appointments.filter(a => a.tcaDate === new Date().toISOString().split('T')[0]).length)} icon={CalendarIcon} color="bg-sky-500" />
+        <StatCard title="Task Completed" value={fetching ? "..." : String(appointments.filter(a => a.status === 'COMPLETED').length)} icon={CheckIcon} color="bg-emerald-600" />
       </section>
 
-      <Card className="overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4 bg-white/50">
+      <Card className="overflow-hidden border-none shadow-2xl">
+        <div className="px-8 py-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4 bg-gradient-to-r from-white to-slate-50">
           <div>
-            <h2 className="text-lg font-bold text-slate-800">Patient Database</h2>
-            <p className="text-xs text-slate-500 mt-1">Page {currentPage} of {totalPages} ({totalRecords} total records).</p>
+            <h2 className="text-xl font-black text-slate-800">Master Patient Index</h2>
+            <p className="text-xs font-medium text-slate-500 mt-1">Showing page {currentPage} of {totalPages}</p>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => loadData(currentPage)} disabled={fetching}>
-              {fetching ? (
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div>
-                  Loading...
-                </div>
-              ) : 'Refresh Page'}
-            </Button>
-            <Button variant="gradient" size="sm" onClick={() => setIsAddModalOpen(true)}>+ Add Appointment</Button>
+          <div className="flex gap-3">
+             <Button variant="outline" size="md" onClick={() => loadData(currentPage)} disabled={fetching}>Refresh</Button>
+            <Button variant="gradient" size="md" onClick={() => setIsAddModalOpen(true)}>+ New Appointment</Button>
           </div>
         </div>
         
-        <div className="overflow-x-auto min-h-[300px]">
+        <div className="overflow-x-auto min-h-[400px]">
           {fetching && appointments.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-64 space-y-4">
-               <div className="w-10 h-10 border-4 border-sky-600 border-t-transparent rounded-full animate-spin"></div>
-               <p className="text-slate-400 text-sm font-medium">Fetching page data...</p>
+            <div className="flex flex-col items-center justify-center h-80 space-y-6">
+               <div className="w-16 h-16 border-4 border-sky-600 border-t-transparent rounded-full animate-spin"></div>
+               <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">Syncing Medical Database...</p>
             </div>
           ) : (
-            <>
+            <div className="p-4">
               <table className="w-full text-left">
                 <thead>
-                  <tr className="bg-slate-50 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  <tr className="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-widest">
                     <th className="px-6 py-4">Patient Name</th>
                     <th className="px-6 py-4">IC Number</th>
-                    <th className="px-6 py-4">TCA Date</th>
+                    <th className="px-6 py-4">Review Date (TCA)</th>
                     <th className="px-6 py-4 text-center">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {appointments.length > 0 ? appointments.map((appt) => (
-                    <tr key={appt.id} className="hover:bg-sky-50/50 transition-colors cursor-pointer group" onClick={() => navigate(`/view-user/${appt.icNo}`)}>
-                      <td className="px-6 py-4">
-                        <div className="font-semibold text-slate-700 group-hover:text-sky-700 transition-colors">{appt.name}</div>
-                        {appt.psNo && <div className="text-[10px] text-slate-400 font-mono">#{appt.psNo}</div>}
+                    <tr key={appt.id} className="group hover:bg-sky-50/40 transition-all cursor-pointer" onClick={() => navigate(`/view-user/${appt.icNo}`)}>
+                      <td className="px-6 py-5">
+                        <div className="font-black text-slate-800 uppercase tracking-tight">{appt.name}</div>
+                        {appt.psNo && <div className="text-[10px] text-slate-400 font-mono">ID: {appt.psNo}</div>}
                       </td>
-                      <td className="px-6 py-4 font-mono text-xs text-slate-500">{appt.icNo}</td>
-                      <td className="px-6 py-4 text-sm text-slate-600">{appt.tcaDate || 'N/A'}</td>
-                      <td className="px-6 py-4 text-center"><Badge theme={appt.status === 'COMPLETED' ? 'success' : 'warning'}>{appt.status || 'PENDING'}</Badge></td>
+                      <td className="px-6 py-5 font-mono text-xs text-slate-600">{appt.icNo}</td>
+                      <td className="px-6 py-5 text-sm text-slate-600 font-bold">{appt.tcaDate || 'N/A'}</td>
+                      <td className="px-6 py-5 text-center">
+                        <Badge theme={appt.status === 'COMPLETED' ? 'success' : 'warning'}>{appt.status}</Badge>
+                      </td>
                     </tr>
                   )) : (
-                    <tr>
-                      <td colSpan={4} className="px-6 py-12 text-center text-slate-400 italic">No patients found on this page.</td>
-                    </tr>
+                    <tr><td colSpan={4} className="px-6 py-20 text-center text-slate-400 italic font-medium">No records found on this page.</td></tr>
                   )}
                 </tbody>
               </table>
 
-              {/* Pagination Footer */}
-              <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div className="text-xs text-slate-500 font-medium">
-                  Showing records {(currentPage - 1) * PAGE_SIZE + 1} to {Math.min(totalRecords, currentPage * PAGE_SIZE)} of {totalRecords}
-                </div>
-                
-                <div className="flex items-center gap-4">
-                  <div className="flex gap-1 items-center">
-                    {pageNumbers.map(page => (
-                      <Button 
-                        key={page}
-                        variant={currentPage === page ? "gradient" : "flat"} 
-                        size="sm" 
-                        className="w-8 h-8 p-0" 
-                        onClick={() => handlePageClick(page)}
-                        disabled={fetching}
-                      >
-                        {page}
-                      </Button>
-                    ))}
-                  </div>
-
-                  <div className="flex gap-2">
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={handlePrevPage} 
-                      disabled={currentPage === 1 || fetching}
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
-                      <span className="ml-1 hidden sm:inline">Prev</span>
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={handleNextPage} 
-                      disabled={currentPage === totalPages || fetching}
-                    >
-                      <span className="mr-1 hidden sm:inline">Next</span>
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
-                    </Button>
-                  </div>
+              <div className="mt-8 px-6 py-4 bg-slate-50 rounded-xl flex items-center justify-between">
+                <div className="text-xs font-black text-slate-400 uppercase tracking-widest">Page {currentPage} of {totalPages}</div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} disabled={currentPage === 1}>Prev</Button>
+                  <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} disabled={currentPage === totalPages}>Next</Button>
                 </div>
               </div>
-            </>
+            </div>
           )}
         </div>
       </Card>
 
-      <Dialog open={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} title="Add Appointment" size="md">
-        <div className="space-y-4">
-          <div className="flex border-b mb-4">
-            <button className={`px-4 py-2 text-sm font-bold ${addTab === 'existing' ? 'text-sky-600 border-b-2 border-sky-600' : 'text-slate-400'}`} onClick={() => setAddTab('existing')}>Existing Patient</button>
-            <button className={`px-4 py-2 text-sm font-bold ${addTab === 'new' ? 'text-sky-600 border-b-2 border-sky-600' : 'text-slate-400'}`} onClick={() => setAddTab('new')}>New Enrollment</button>
+      <Dialog open={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} title="Patient Service Enrollment" size="md">
+        <div className="space-y-6">
+          <div className="flex p-1 bg-slate-100 rounded-xl">
+            <button className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-lg ${addTab === 'existing' ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-400'}`} onClick={() => setAddTab('existing')}>Existing Record</button>
+            <button className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-lg ${addTab === 'new' ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-400'}`} onClick={() => setAddTab('new')}>New Registration</button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {addTab === 'new' && <Input label="Full Name" placeholder="e.g. Ahmad Ali" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />}
-            <Input label="IC Number" placeholder="12-digit number" value={form.icNo} onChange={e => setForm({...form, icNo: e.target.value})} />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {addTab === 'existing' ? (
+              <div className="col-span-2">
+                <SearchableSelect 
+                  label="Lookup Patient (IC)"
+                  loading={searchingUser}
+                  options={searchOptions}
+                  onSearch={handleSearchUser}
+                  onChange={(val) => setForm({ ...form, icNo: val.icNo, name: val.name, psNo: val.psNo || '' })}
+                />
+              </div>
+            ) : (
+              <>
+                <Input label="Full Patient Name" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
+                <Input label="NRIC Number" value={form.icNo} onChange={e => setForm({...form, icNo: e.target.value})} />
+              </>
+            )}
             <Input label="PS Number" placeholder="MS-XXXXX" value={form.psNo} onChange={e => setForm({...form, psNo: e.target.value})} />
-            <Input label="TCA Date" type="date" value={form.tcaDate} onChange={e => setForm({...form, tcaDate: e.target.value})} />
-            <Input label="Supply Date" type="date" value={form.scheduleSupplyDate} onChange={e => setForm({...form, scheduleSupplyDate: e.target.value})} />
+            <Input label="Review Date (TCA)" type="date" value={form.tcaDate} onChange={e => setForm({...form, tcaDate: e.target.value})} />
+            <div className="col-span-2">
+              <Input label="Medication Supply Date" type="date" value={form.scheduleSupplyDate} onChange={e => setForm({...form, scheduleSupplyDate: e.target.value})} />
+            </div>
           </div>
 
-          <div className="flex justify-end gap-3 pt-4">
+          <div className="flex justify-end gap-3 pt-6 border-t">
             <Button variant="flat" onClick={() => setIsAddModalOpen(false)}>Cancel</Button>
-            <Button variant="gradient" onClick={handleCreateAppointment} disabled={loading || !form.icNo}>{loading ? 'Processing...' : 'Save & Register'}</Button>
+            <Button variant="gradient" onClick={handleCreateAppointment} disabled={loading || !form.icNo}>
+              {loading ? 'Submitting...' : 'Register'}
+            </Button>
           </div>
         </div>
       </Dialog>
