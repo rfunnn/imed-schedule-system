@@ -18,8 +18,12 @@ export default async function handler(req: any, res: any) {
       return res.status(400).json({ error: 'icNo parameter is required' });
     }
 
-    const forwardedUrl = `${EXTERNAL_URL}?icNo=${encodeURIComponent(icNo)}`;
-    console.log(`[Proxy:get-user] Fetching: ${forwardedUrl}`);
+    const apiKey = process.env.API_KEY;
+    const params = new URLSearchParams();
+    params.append('icNo', icNo as string);
+    if (apiKey) params.append('key', apiKey);
+
+    const forwardedUrl = `${EXTERNAL_URL}?${params.toString()}`;
 
     const response = await fetch(forwardedUrl, {
       method: 'GET',
@@ -35,7 +39,6 @@ export default async function handler(req: any, res: any) {
       res.status(response.status).send(text);
     }
   } catch (error: any) {
-    console.error('[Proxy Error]', error);
     res.status(500).json({ error: error.message });
   }
 }

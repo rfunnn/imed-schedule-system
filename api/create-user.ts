@@ -2,7 +2,6 @@
 const EXTERNAL_URL = 'https://script.google.com/macros/s/AKfycbw9Fh4OCD99Q1PpLGe0JZnGTHA7aVA3Io_MdnxbQHOpsNSQbTXixYtOCYOn0YgjKCcos/exec';
 
 export default async function handler(req: any, res: any) {
-  // Enable CORS
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,POST,PUT');
@@ -15,9 +14,16 @@ export default async function handler(req: any, res: any) {
 
   try {
     const { icNo } = req.query;
+    const apiKey = process.env.API_KEY;
+    
     let forwardedUrl = EXTERNAL_URL;
-    if (icNo) {
-      forwardedUrl = `${EXTERNAL_URL}?icNo=${encodeURIComponent(icNo)}`;
+    const params = new URLSearchParams();
+    if (icNo) params.append('icNo', icNo as string);
+    if (apiKey) params.append('key', apiKey);
+    
+    const queryString = params.toString();
+    if (queryString) {
+      forwardedUrl = `${EXTERNAL_URL}?${queryString}`;
     }
 
     const headerOverride = req.headers['x-http-method-override'];
@@ -27,10 +33,8 @@ export default async function handler(req: any, res: any) {
     const forwardHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
     if (wantsPatch) forwardHeaders['X-HTTP-Method-Override'] = 'PATCH';
 
-    console.log(`[Proxy] Forwarding ${req.method} to ${forwardedUrl} (Patch: ${wantsPatch})`);
-
     const response = await fetch(forwardedUrl, {
-      method: 'POST', // Apps Script usually requires POST for everything
+      method: 'POST',
       headers: forwardHeaders,
       body: JSON.stringify(body),
     });
@@ -44,7 +48,6 @@ export default async function handler(req: any, res: any) {
       res.status(response.status).send(text);
     }
   } catch (error: any) {
-    console.error('[Proxy Error]', error);
     res.status(500).json({ error: error.message });
   }
 }

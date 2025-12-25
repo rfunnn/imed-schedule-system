@@ -5,6 +5,9 @@ import { Button, Badge, Card, Dialog, Input } from './ui/Elements';
 import { ApiLog, Appointment, User } from '../types';
 import { apiService } from '../services/apiService';
 
+// Inline Icons to prevent missing dependency errors
+const ChevronLeftIcon = (props: any) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>;
+
 export default function ViewUser({ addLog }: { addLog: (log: ApiLog) => void }) {
   const { icNo } = useParams<{ icNo: string }>();
   const navigate = useNavigate();
@@ -16,11 +19,10 @@ export default function ViewUser({ addLog }: { addLog: (log: ApiLog) => void }) 
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    // Simulating fetching user data
     const fetchUser = async () => {
       setLoading(true);
       try {
-        // Mocking user retrieval from IC
+        // Simulate initial fetch with delay
         setTimeout(() => {
           const mockUser: User = {
             name: 'Ali Bin Ahmad',
@@ -31,7 +33,6 @@ export default function ViewUser({ addLog }: { addLog: (log: ApiLog) => void }) 
           setUser(mockUser);
           setUpdateForm({ name: mockUser.name, psNo: mockUser.psNo || '', email: mockUser.email || '' });
           
-          // Mock history
           setAppointments([
             { id: '1', name: mockUser.name, icNo: mockUser.icNo, tcaDate: '2023-10-10', scheduleSupplyDate: '2023-10-17', status: 'COMPLETED', is_arrived: true, receivedDate: '2023-10-17' },
             { id: '2', name: mockUser.name, icNo: mockUser.icNo, tcaDate: '2023-11-20', scheduleSupplyDate: '2023-11-27', status: 'PENDING' },
@@ -62,6 +63,11 @@ export default function ViewUser({ addLog }: { addLog: (log: ApiLog) => void }) 
     }
   };
 
+  const getInitials = (name: string = '') => {
+    if (!name) return '??';
+    return name.split(' ').filter(Boolean).map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  };
+
   if (loading) return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
       <div className="w-12 h-12 border-4 border-sky-600 border-t-transparent rounded-full animate-spin"></div>
@@ -73,17 +79,16 @@ export default function ViewUser({ addLog }: { addLog: (log: ApiLog) => void }) 
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 animate-in slide-in-from-bottom-4 duration-500">
       <div className="flex items-center gap-4">
         <Button variant="flat" size="sm" onClick={() => navigate(-1)}>
-          <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+          <ChevronLeftIcon className="w-5 h-5 mr-1" />
           Back to Dashboard
         </Button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Profile Card */}
         <Card className="lg:col-span-1 p-8 space-y-6 bg-gradient-to-br from-white to-sky-50/30">
           <div className="flex flex-col items-center text-center space-y-4">
             <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-sky-600 to-indigo-600 flex items-center justify-center text-white text-3xl font-bold shadow-xl">
-              {user?.name.split(' ').map(n => n[0]).join('')}
+              {getInitials(user?.name)}
             </div>
             <div>
               <h2 className="text-xl font-bold text-slate-800">{user?.name}</h2>
@@ -111,7 +116,6 @@ export default function ViewUser({ addLog }: { addLog: (log: ApiLog) => void }) 
           </Button>
         </Card>
 
-        {/* History Card */}
         <Card className="lg:col-span-2 overflow-hidden">
           <div className="px-6 py-4 border-b border-slate-100 bg-white/50">
             <h3 className="text-lg font-bold text-slate-800">Appointment History</h3>
@@ -145,7 +149,6 @@ export default function ViewUser({ addLog }: { addLog: (log: ApiLog) => void }) 
         </Card>
       </div>
 
-      {/* Update Modal */}
       <Dialog 
         open={isUpdateModalOpen} 
         onClose={() => setIsUpdateModalOpen(false)} 
