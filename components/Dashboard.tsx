@@ -29,7 +29,6 @@ export default function Dashboard({ addLog }: { addLog: (log: ApiLog) => void })
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Form states aligned with DTO names
   const [form, setForm] = useState({
     name: '',
     icNo: '',
@@ -53,10 +52,11 @@ export default function Dashboard({ addLog }: { addLog: (log: ApiLog) => void })
     setLoading(true);
     setError(null);
     try {
+      // Ensure icNo is a string as per DTO
       const dto: CreateAppointmentNewUserDTO = {
-        name: form.name,
-        icNo: form.icNo,
-        psNo: form.psNo,
+        name: form.name.trim(),
+        icNo: String(form.icNo).trim(),
+        psNo: form.psNo.trim() || null,
         appointmentDate: form.appointmentDate || new Date().toISOString().split('T')[0],
         scheduleSupplyDate: form.scheduleSupplyDate,
         status: 'PENDING'
@@ -64,7 +64,8 @@ export default function Dashboard({ addLog }: { addLog: (log: ApiLog) => void })
 
       const result = await apiService.createNewUser(dto, addLog);
       
-      if (result.ok) {
+      // Check for both HTTP success and business logic success
+      if (result.ok && result.data?.success !== false) {
         const newAppt: Appointment = {
           id: Math.random().toString(36).substring(7),
           name: dto.name,
@@ -78,10 +79,12 @@ export default function Dashboard({ addLog }: { addLog: (log: ApiLog) => void })
         setIsAddModalOpen(false);
         setForm({ name: '', icNo: '', psNo: '', appointmentDate: '', scheduleSupplyDate: '' });
       } else {
-        setError(typeof result.data === 'string' ? result.data : JSON.stringify(result.data));
+        // Handle business error returned in the body
+        const errorMsg = result.data?.message || result.data?.error || "Failed to create user. It may already exist.";
+        setError(errorMsg);
       }
     } catch (err) {
-      setError("Network error occurred. Check logs for details.");
+      setError("A connection error occurred. Check the system logs below.");
     } finally {
       setLoading(false);
     }
@@ -89,7 +92,6 @@ export default function Dashboard({ addLog }: { addLog: (log: ApiLog) => void })
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8">
-      {/* Header */}
       <header className="flex flex-col md:flex-row items-center justify-between border-b border-slate-200 pb-6 gap-4">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 bg-sky-600 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg">
@@ -107,7 +109,6 @@ export default function Dashboard({ addLog }: { addLog: (log: ApiLog) => void })
         </div>
       </header>
 
-      {/* Stats */}
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard title="Today's Appointments" value="142" icon={CalendarIcon} color="bg-sky-500" delta="+12%" />
         <StatCard title="Total Completed" value="98" icon={CheckIcon} color="bg-emerald-500" delta="+20%" />
@@ -115,7 +116,6 @@ export default function Dashboard({ addLog }: { addLog: (log: ApiLog) => void })
         <StatCard title="Total Users" value="1,204" icon={UserIcon} color="bg-indigo-500" delta="+4%" />
       </section>
 
-      {/* Main Table Card */}
       <Card className="overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4 bg-white/50">
           <div>
@@ -162,7 +162,6 @@ export default function Dashboard({ addLog }: { addLog: (log: ApiLog) => void })
         </div>
       </Card>
 
-      {/* Add Appointment Modal */}
       <Dialog 
         open={isAddModalOpen} 
         onClose={() => setIsAddModalOpen(false)} 
@@ -221,8 +220,8 @@ export default function Dashboard({ addLog }: { addLog: (log: ApiLog) => void })
           </div>
 
           {error && (
-            <div className="p-3 bg-rose-50 border border-rose-100 rounded-lg text-rose-600 text-xs font-medium">
-              Error: {error}
+            <div className="p-3 bg-rose-50 border border-rose-100 rounded-lg text-rose-600 text-xs font-bold animate-pulse">
+              ⚠️ {error}
             </div>
           )}
 
