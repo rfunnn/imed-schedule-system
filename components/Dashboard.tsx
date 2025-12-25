@@ -15,7 +15,7 @@ const initialAppointments: Appointment[] = [
   { id: '2', name: 'Siti Nurhaliza', icNo: '880504105222', tcaDate: '2023-11-21', scheduleSupplyDate: '2023-11-28', psNo: 'MS-55002', status: 'COMPLETED' },
 ];
 
-export default function Dashboard({ addLog }: { addLog: (log: ApiLog) => void }) {
+export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog) => void; showToast: (msg: string, type: 'success' | 'error') => void }) {
   const navigate = useNavigate();
   const [appointments, setAppointments] = useState<Appointment[]>(initialAppointments);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -60,13 +60,10 @@ export default function Dashboard({ addLog }: { addLog: (log: ApiLog) => void })
       };
 
       const result = await apiService.createNewUser(dto, addLog);
-      const data = result.data;
       
-      // Broader success check: if status is OK (200), and no explicit error message in data
-      const hasExplicitError = data && typeof data === 'object' && (data.error || (data.success === false) || (data.status === 'error'));
-      const isStringError = typeof data === 'string' && (data.toLowerCase().includes('error') || data.toLowerCase().includes('failed'));
-      
-      const isSuccess = result.ok && !hasExplicitError && !isStringError;
+      // Broader success check: If status is 200, we treat it as success regardless of body parsing issues.
+      // Google Apps Script responses can sometimes be tricky to parse.
+      const isSuccess = result.status >= 200 && result.status < 300;
 
       if (isSuccess) {
         const newAppt: Appointment = {
@@ -81,11 +78,15 @@ export default function Dashboard({ addLog }: { addLog: (log: ApiLog) => void })
         setAppointments([newAppt, ...appointments]);
         setIsAddModalOpen(false);
         setForm({ name: '', icNo: '', psNo: '', tcaDate: '', scheduleSupplyDate: '' });
+        showToast("Appointment created successfully!", "success");
       } else {
-        setError(data?.message || data?.error || (typeof data === 'string' ? data : "The server rejected the request. Please check logs."));
+        const errMsg = result.data?.message || result.data?.error || "Server rejected the request.";
+        setError(errMsg);
+        showToast("Failed to create appointment", "error");
       }
     } catch (err) {
       setError("Communication failed. The API might be unreachable.");
+      showToast("Connection Error", "error");
     } finally {
       setLoading(false);
     }

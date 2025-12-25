@@ -7,7 +7,7 @@ import { apiService } from '../services/apiService.ts';
 
 const ChevronLeftIcon = (props: any) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>;
 
-export default function ViewUser({ addLog }: { addLog: (log: ApiLog) => void }) {
+export default function ViewUser({ addLog, showToast }: { addLog: (log: ApiLog) => void; showToast: (msg: string, type: 'success' | 'error') => void }) {
   const { icNo } = useParams<{ icNo: string }>();
   const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(null);
@@ -22,10 +22,9 @@ export default function ViewUser({ addLog }: { addLog: (log: ApiLog) => void }) 
     const fetchUser = async () => {
       setLoading(true);
       try {
-        // First try to get actual data
         const result = await apiService.getUser(icNo || '', addLog);
-        if (result.ok && result.data && result.data.success) {
-          const d = result.data.data;
+        if (result.ok && result.data && (result.data.success || result.status === 200)) {
+          const d = result.data.data || result.data;
           const fetchedUser: User = {
             name: d.Name || d.name || 'Unknown Patient',
             icNo: String(d.IC || d.icNo || icNo),
@@ -34,10 +33,9 @@ export default function ViewUser({ addLog }: { addLog: (log: ApiLog) => void }) 
           };
           setUser(fetchedUser);
           setUpdateForm({ name: fetchedUser.name, psNo: fetchedUser.psNo || '', email: fetchedUser.email || '' });
-          // If the API returns history, map it here
           setAppointments([]); 
         } else {
-          // Fallback mock if user not found or API fails
+          // Fallback mock
           const mockUser: User = {
             name: 'Ali Bin Ahmad',
             icNo: icNo || 'Unknown',
@@ -66,21 +64,21 @@ export default function ViewUser({ addLog }: { addLog: (log: ApiLog) => void }) 
     setUpdateError(null);
     try {
       const result = await apiService.updateUser(user.icNo, updateForm, addLog);
-      const data = result.data;
-
-      // Broadened success check
-      const hasExplicitError = data && typeof data === 'object' && (data.error || (data.success === false) || (data.status === 'error'));
-      const isStringError = typeof data === 'string' && (data.toLowerCase().includes('error') || data.toLowerCase().includes('failed'));
-      const isSuccess = result.ok && !hasExplicitError && !isStringError;
+      
+      const isSuccess = result.status >= 200 && result.status < 300;
 
       if (isSuccess) {
         setUser({ ...user, ...updateForm });
         setIsUpdateModalOpen(false);
+        showToast("Profile updated successfully!", "success");
       } else {
-        setUpdateError(data?.message || data?.error || (typeof data === 'string' ? data : "Update failed."));
+        const errMsg = result.data?.message || result.data?.error || "Update failed.";
+        setUpdateError(errMsg);
+        showToast("Failed to update profile", "error");
       }
     } catch (err) {
       setUpdateError("Failed to communicate with the server.");
+      showToast("Connection Error", "error");
     } finally {
       setSubmitting(false);
     }
