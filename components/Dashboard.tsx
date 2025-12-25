@@ -40,15 +40,15 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch initial data
+  // Fetch initial data (All Users)
   const loadData = async () => {
     setFetching(true);
     try {
       const result = await apiService.getAppointments(addLog);
       if (result.ok && result.data) {
-        // Map the API structure to the local Appointment structure
-        // Assuming result.data.data is the array of items from Sheets
-        const rawData = Array.isArray(result.data.data) ? result.data.data : [];
+        // Handle both direct array responses and object-wrapped data
+        const rawData = Array.isArray(result.data.data) ? result.data.data : (Array.isArray(result.data) ? result.data : []);
+        
         const mapped: Appointment[] = rawData.map((item: any) => ({
           id: item.id || Math.random().toString(36).substring(7),
           name: item.Name || item.name || 'Unknown',
@@ -60,9 +60,10 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
         }));
         setAppointments(mapped);
       } else {
-        showToast("Notice: No live data found, using empty list.", "info" as any);
+        showToast("Notice: No live data found.", "error");
       }
     } catch (err) {
+      console.error('Fetch error:', err);
       showToast("Error loading patient records.", "error");
     } finally {
       setFetching(false);
@@ -92,21 +93,9 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
       const result = await apiService.createNewUser(dto, addLog);
       
       if (result.status >= 200 && result.status < 300) {
-        // Optimistic update
-        const newAppt: Appointment = {
-          id: Math.random().toString(36).substring(7),
-          name: dto.name,
-          icNo: dto.icNo,
-          psNo: dto.psNo || undefined,
-          tcaDate: dto.tcaDate,
-          scheduleSupplyDate: dto.scheduleSupplyDate || dto.tcaDate,
-          status: 'PENDING'
-        };
-        setAppointments([newAppt, ...appointments]);
         setForm({ name: '', icNo: '', psNo: '', tcaDate: '', scheduleSupplyDate: '' });
         showToast("Success: User created successfully!", "success");
-        
-        // Refresh full list to be sure
+        // Refresh full list after successful creation
         loadData();
       } else {
         showToast("Failed: Server rejected the request.", "error");
@@ -136,29 +125,36 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
       </header>
 
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Today's Appointments" value={fetching ? "..." : String(appointments.length)} icon={CalendarIcon} color="bg-sky-500" delta="+12%" />
-        <StatCard title="Total Completed" value={fetching ? "..." : String(appointments.filter(a => a.status === 'COMPLETED').length)} icon={CheckIcon} color="bg-emerald-500" delta="+20%" />
-        <StatCard title="No-shows" value="6" icon={WarningIcon} color="bg-amber-500" delta="-8%" />
-        <StatCard title="Total Users" value={fetching ? "..." : String(new Set(appointments.map(a => a.icNo)).size)} icon={UserIcon} color="bg-indigo-500" delta="+4%" />
+        <StatCard title="Total Users" value={fetching ? "..." : String(appointments.length)} icon={UserIcon} color="bg-indigo-500" delta={appointments.length > 0 ? `+${appointments.length}` : '0'} />
+        <StatCard title="Today's Appointments" value={fetching ? "..." : String(appointments.filter(a => a.tcaDate === new Date().toISOString().split('T')[0]).length)} icon={CalendarIcon} color="bg-sky-500" />
+        <StatCard title="Completed" value={fetching ? "..." : String(appointments.filter(a => a.status === 'COMPLETED').length)} icon={CheckIcon} color="bg-emerald-500" />
+        <StatCard title="Pending" value={fetching ? "..." : String(appointments.filter(a => a.status === 'PENDING').length)} icon={WarningIcon} color="bg-amber-500" />
       </section>
 
       <Card className="overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4 bg-white/50">
           <div>
-            <h2 className="text-lg font-bold text-slate-800">Recent Appointments</h2>
+            <h2 className="text-lg font-bold text-slate-800">Patient Database</h2>
+            <p className="text-xs text-slate-500 mt-1">Listing all registered users and their last appointment status.</p>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={loadData} disabled={fetching}>
-              {fetching ? 'Refreshing...' : 'Refresh'}
+              {fetching ? (
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div>
+                  Refreshing...
+                </div>
+              ) : 'Refresh List'}
             </Button>
             <Button variant="gradient" size="sm" onClick={() => setIsAddModalOpen(true)}>+ Add Appointment</Button>
           </div>
         </div>
         
         <div className="overflow-x-auto min-h-[300px]">
-          {fetching ? (
-            <div className="flex items-center justify-center h-64">
-               <div className="w-8 h-8 border-4 border-sky-600 border-t-transparent rounded-full animate-spin"></div>
+          {fetching && appointments.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-64 space-y-4">
+               <div className="w-10 h-10 border-4 border-sky-600 border-t-transparent rounded-full animate-spin"></div>
+               <p className="text-slate-400 text-sm font-medium">Fetching users from database...</p>
             </div>
           ) : (
             <table className="w-full text-left">
@@ -172,15 +168,18 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {appointments.length > 0 ? appointments.map((appt) => (
-                  <tr key={appt.id} className="hover:bg-sky-50 transition-colors cursor-pointer" onClick={() => navigate(`/view-user/${appt.icNo}`)}>
-                    <td className="px-6 py-4 font-semibold text-slate-700">{appt.name}</td>
+                  <tr key={appt.id} className="hover:bg-sky-50/50 transition-colors cursor-pointer group" onClick={() => navigate(`/view-user/${appt.icNo}`)}>
+                    <td className="px-6 py-4">
+                      <div className="font-semibold text-slate-700 group-hover:text-sky-700 transition-colors">{appt.name}</div>
+                      {appt.psNo && <div className="text-[10px] text-slate-400 font-mono">#{appt.psNo}</div>}
+                    </td>
                     <td className="px-6 py-4 font-mono text-xs text-slate-500">{appt.icNo}</td>
-                    <td className="px-6 py-4 text-sm text-slate-600">{appt.tcaDate}</td>
-                    <td className="px-6 py-4 text-center"><Badge theme={appt.status === 'COMPLETED' ? 'success' : 'warning'}>{appt.status}</Badge></td>
+                    <td className="px-6 py-4 text-sm text-slate-600">{appt.tcaDate || 'N/A'}</td>
+                    <td className="px-6 py-4 text-center"><Badge theme={appt.status === 'COMPLETED' ? 'success' : 'warning'}>{appt.status || 'PENDING'}</Badge></td>
                   </tr>
                 )) : (
                   <tr>
-                    <td colSpan={4} className="px-6 py-12 text-center text-slate-400 italic">No appointments found.</td>
+                    <td colSpan={4} className="px-6 py-12 text-center text-slate-400 italic">No patients found in the database.</td>
                   </tr>
                 )}
               </tbody>
@@ -189,24 +188,24 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
         </div>
       </Card>
 
-      <Dialog open={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} title="New Appointment" size="md">
+      <Dialog open={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} title="Add Appointment" size="md">
         <div className="space-y-4">
           <div className="flex border-b mb-4">
-            <button className={`px-4 py-2 text-sm font-bold ${addTab === 'existing' ? 'text-sky-600 border-b-2 border-sky-600' : 'text-slate-400'}`} onClick={() => setAddTab('existing')}>Existing</button>
-            <button className={`px-4 py-2 text-sm font-bold ${addTab === 'new' ? 'text-sky-600 border-b-2 border-sky-600' : 'text-slate-400'}`} onClick={() => setAddTab('new')}>New User</button>
+            <button className={`px-4 py-2 text-sm font-bold ${addTab === 'existing' ? 'text-sky-600 border-b-2 border-sky-600' : 'text-slate-400'}`} onClick={() => setAddTab('existing')}>Existing Patient</button>
+            <button className={`px-4 py-2 text-sm font-bold ${addTab === 'new' ? 'text-sky-600 border-b-2 border-sky-600' : 'text-slate-400'}`} onClick={() => setAddTab('new')}>New Enrollment</button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {addTab === 'new' && <Input label="Full Name" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />}
-            <Input label="IC Number" value={form.icNo} onChange={e => setForm({...form, icNo: e.target.value})} />
-            <Input label="PS Number" value={form.psNo} onChange={e => setForm({...form, psNo: e.target.value})} />
+            {addTab === 'new' && <Input label="Full Name" placeholder="e.g. Ahmad Ali" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />}
+            <Input label="IC Number" placeholder="12-digit number" value={form.icNo} onChange={e => setForm({...form, icNo: e.target.value})} />
+            <Input label="PS Number" placeholder="MS-XXXXX" value={form.psNo} onChange={e => setForm({...form, psNo: e.target.value})} />
             <Input label="TCA Date" type="date" value={form.tcaDate} onChange={e => setForm({...form, tcaDate: e.target.value})} />
             <Input label="Supply Date" type="date" value={form.scheduleSupplyDate} onChange={e => setForm({...form, scheduleSupplyDate: e.target.value})} />
           </div>
 
           <div className="flex justify-end gap-3 pt-4">
             <Button variant="flat" onClick={() => setIsAddModalOpen(false)}>Cancel</Button>
-            <Button variant="gradient" onClick={handleCreateAppointment} disabled={loading || !form.icNo}>{loading ? 'Saving...' : 'Confirm'}</Button>
+            <Button variant="gradient" onClick={handleCreateAppointment} disabled={loading || !form.icNo}>{loading ? 'Processing...' : 'Save & Register'}</Button>
           </div>
         </div>
       </Dialog>
