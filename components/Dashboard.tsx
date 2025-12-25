@@ -6,7 +6,7 @@ import { ApiLog, Appointment, CreateAppointmentNewUserDTO } from '../types.ts';
 import { apiService } from '../services/apiService.ts';
 
 // Icons
-const CalendarIcon = (props: any) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>;
+const CalendarIcon = (props: any) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2-2v12a2 2 0 002 2z" /></svg>;
 const CheckIcon = (props: any) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
 const UserIcon = (props: any) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>;
 const WarningIcon = (props: any) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>;
@@ -52,9 +52,13 @@ export default function Dashboard({ addLog }: { addLog: (log: ApiLog) => void })
     setLoading(true);
     setError(null);
     try {
-      const dto: CreateAppointmentNewUserDTO = {
+      // Clean IC No - get digits only
+      const cleanIc = form.icNo.replace(/\D/g, '');
+      
+      const dto: any = {
         name: form.name.trim() || 'New Patient',
-        icNo: String(form.icNo).trim(),
+        // Send as number if valid, otherwise string - matching original code intent
+        icNo: /^\d+$/.test(cleanIc) ? Number(cleanIc) : cleanIc,
         psNo: form.psNo.trim() || null,
         tcaDate: form.tcaDate || new Date().toISOString().split('T')[0],
         scheduleSupplyDate: form.scheduleSupplyDate || form.tcaDate || new Date().toISOString().split('T')[0],
@@ -63,25 +67,30 @@ export default function Dashboard({ addLog }: { addLog: (log: ApiLog) => void })
 
       const result = await apiService.createNewUser(dto, addLog);
       
-      if (result.ok && result.data?.success !== false) {
+      // Detailed response checking
+      const responseData = result.data;
+      const isSuccess = result.ok && (responseData?.success === true || responseData?.status === 'success' || (typeof responseData === 'object' && !responseData.error && !responseData.message?.toLowerCase().includes('exist')));
+
+      if (isSuccess) {
         const newAppt: Appointment = {
           id: Math.random().toString(36).substring(7),
           name: dto.name,
-          icNo: dto.icNo,
+          icNo: String(dto.icNo),
           psNo: dto.psNo || undefined,
           tcaDate: dto.tcaDate,
-          scheduleSupplyDate: dto.scheduleSupplyDate || dto.tcaDate,
+          scheduleSupplyDate: dto.scheduleSupplyDate,
           status: 'PENDING'
         };
         setAppointments([newAppt, ...appointments]);
         setIsAddModalOpen(false);
         setForm({ name: '', icNo: '', psNo: '', tcaDate: '', scheduleSupplyDate: '' });
       } else {
-        const errorMsg = result.data?.message || result.data?.error || "User already exists or failed to save.";
+        // Capture specific error message from Google Script
+        const errorMsg = responseData?.message || responseData?.error || "The record was not saved. Please check if the IC already exists.";
         setError(errorMsg);
       }
     } catch (err) {
-      setError("System connection error. Please try again or check logs.");
+      setError("Network or proxy error. Please check the system logs at the bottom of the screen.");
     } finally {
       setLoading(false);
     }
@@ -217,8 +226,8 @@ export default function Dashboard({ addLog }: { addLog: (log: ApiLog) => void })
           </div>
 
           {error && (
-            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-600 text-xs font-bold shadow-sm">
-              <span className="mr-2">⚠️</span> {error}
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-600 text-[11px] font-bold shadow-sm leading-relaxed">
+              <span className="mr-2">❌</span> {error}
             </div>
           )}
 
@@ -229,7 +238,7 @@ export default function Dashboard({ addLog }: { addLog: (log: ApiLog) => void })
               onClick={handleCreateAppointment}
               disabled={loading || !form.icNo}
             >
-              {loading ? 'Saving...' : (addTab === 'new' ? 'Create & Add' : 'Add Appointment')}
+              {loading ? 'Transmitting...' : (addTab === 'new' ? 'Create & Add' : 'Add Appointment')}
             </Button>
           </div>
         </div>
