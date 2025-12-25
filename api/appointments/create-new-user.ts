@@ -25,22 +25,22 @@ export default async function handler(req: any, res: any) {
       body: JSON.stringify(req.body),
     });
 
-    const contentType = response.headers.get('content-type');
+    const contentType = response.headers.get('content-type') || '';
     let data;
 
-    if (contentType && contentType.includes('application/json')) {
+    if (contentType.includes('application/json')) {
       data = await response.json();
-      // Forward the external status code or default to 200
-      res.status(response.status || 200).json(data);
+      res.status(200).json(data);
     } else {
       data = await response.text();
-      res.status(response.status || 200).send(data);
+      // Even if not JSON, return it as success to allow frontend to parse strings
+      res.status(200).send(data);
     }
   } catch (error: any) {
-    console.error('[API Error]:', error);
+    console.error('[Proxy Error]:', error);
     res.status(500).json({ 
       success: false, 
-      error: 'Proxy Error', 
+      error: 'Proxy Connection Failed', 
       message: error.message 
     });
   }

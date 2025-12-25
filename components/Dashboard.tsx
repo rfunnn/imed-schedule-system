@@ -33,7 +33,7 @@ export default function Dashboard({ addLog }: { addLog: (log: ApiLog) => void })
     name: '',
     icNo: '',
     psNo: '',
-    appointmentDate: '',
+    tcaDate: '',
     scheduleSupplyDate: ''
   });
 
@@ -52,39 +52,36 @@ export default function Dashboard({ addLog }: { addLog: (log: ApiLog) => void })
     setLoading(true);
     setError(null);
     try {
-      // Ensure icNo is a string as per DTO
       const dto: CreateAppointmentNewUserDTO = {
-        name: form.name.trim(),
+        name: form.name.trim() || 'New Patient',
         icNo: String(form.icNo).trim(),
         psNo: form.psNo.trim() || null,
-        appointmentDate: form.appointmentDate || new Date().toISOString().split('T')[0],
-        scheduleSupplyDate: form.scheduleSupplyDate,
+        tcaDate: form.tcaDate || new Date().toISOString().split('T')[0],
+        scheduleSupplyDate: form.scheduleSupplyDate || form.tcaDate || new Date().toISOString().split('T')[0],
         status: 'PENDING'
       };
 
       const result = await apiService.createNewUser(dto, addLog);
       
-      // Check for both HTTP success and business logic success
       if (result.ok && result.data?.success !== false) {
         const newAppt: Appointment = {
           id: Math.random().toString(36).substring(7),
           name: dto.name,
           icNo: dto.icNo,
           psNo: dto.psNo || undefined,
-          tcaDate: dto.appointmentDate,
-          scheduleSupplyDate: dto.scheduleSupplyDate || dto.appointmentDate,
+          tcaDate: dto.tcaDate,
+          scheduleSupplyDate: dto.scheduleSupplyDate || dto.tcaDate,
           status: 'PENDING'
         };
         setAppointments([newAppt, ...appointments]);
         setIsAddModalOpen(false);
-        setForm({ name: '', icNo: '', psNo: '', appointmentDate: '', scheduleSupplyDate: '' });
+        setForm({ name: '', icNo: '', psNo: '', tcaDate: '', scheduleSupplyDate: '' });
       } else {
-        // Handle business error returned in the body
-        const errorMsg = result.data?.message || result.data?.error || "Failed to create user. It may already exist.";
+        const errorMsg = result.data?.message || result.data?.error || "User already exists or failed to save.";
         setError(errorMsg);
       }
     } catch (err) {
-      setError("A connection error occurred. Check the system logs below.");
+      setError("System connection error. Please try again or check logs.");
     } finally {
       setLoading(false);
     }
@@ -206,10 +203,10 @@ export default function Dashboard({ addLog }: { addLog: (log: ApiLog) => void })
               onChange={e => setForm({...form, psNo: e.target.value})}
             />
             <Input 
-              label="Appointment Date" 
+              label="TCA Date" 
               type="date" 
-              value={form.appointmentDate} 
-              onChange={e => setForm({...form, appointmentDate: e.target.value})}
+              value={form.tcaDate} 
+              onChange={e => setForm({...form, tcaDate: e.target.value})}
             />
             <Input 
               label="Supply Date" 
@@ -220,8 +217,8 @@ export default function Dashboard({ addLog }: { addLog: (log: ApiLog) => void })
           </div>
 
           {error && (
-            <div className="p-3 bg-rose-50 border border-rose-100 rounded-lg text-rose-600 text-xs font-bold animate-pulse">
-              ⚠️ {error}
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-600 text-xs font-bold shadow-sm">
+              <span className="mr-2">⚠️</span> {error}
             </div>
           )}
 
@@ -232,7 +229,7 @@ export default function Dashboard({ addLog }: { addLog: (log: ApiLog) => void })
               onClick={handleCreateAppointment}
               disabled={loading || !form.icNo}
             >
-              {loading ? 'Processing...' : (addTab === 'new' ? 'Create User' : 'Add Appointment')}
+              {loading ? 'Saving...' : (addTab === 'new' ? 'Create & Add' : 'Add Appointment')}
             </Button>
           </div>
         </div>

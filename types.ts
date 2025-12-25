@@ -32,14 +32,14 @@ export interface CreateAppointmentNewUserDTO {
   name: string;
   icNo: string;
   psNo?: string | null;
-  appointmentDate: string;
+  tcaDate: string;
   scheduleSupplyDate?: string;
   status?: string;
 }
 
 export interface CreateAppointmentsFromExistingDTO {
   selectedIds: string[];
-  appointmentDate?: string;
+  tcaDate?: string;
   scheduleSupplyDate?: string;
   status?: string;
 }
