@@ -53,7 +53,8 @@ export default function Dashboard({ addLog }: { addLog: (log: ApiLog) => void })
     setLoading(true);
     setError(null);
     try {
-      const result = await apiService.createUser(form, addLog);
+      // Fixed: Property 'createUser' does not exist on apiService, used 'createNewUser' instead.
+      const result = await apiService.createNewUser(form, addLog);
       
       if (result.ok) {
         const newAppt: Appointment = {
