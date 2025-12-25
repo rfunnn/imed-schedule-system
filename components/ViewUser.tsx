@@ -16,7 +16,6 @@ export default function ViewUser({ addLog, showToast }: { addLog: (log: ApiLog) 
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
   const [updateForm, setUpdateForm] = useState({ name: '', psNo: '', email: '' });
   const [submitting, setSubmitting] = useState(false);
-  const [updateError, setUpdateError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -61,24 +60,20 @@ export default function ViewUser({ addLog, showToast }: { addLog: (log: ApiLog) 
   const handleUpdateUser = async () => {
     if (!user) return;
     setSubmitting(true);
-    setUpdateError(null);
     try {
+      // Close immediately on submission
+      setIsUpdateModalOpen(false);
+      
       const result = await apiService.updateUser(user.icNo, updateForm, addLog);
       
-      const isSuccess = result.status >= 200 && result.status < 300;
-
-      if (isSuccess) {
+      if (result.status >= 200 && result.status < 300) {
         setUser({ ...user, ...updateForm });
-        setIsUpdateModalOpen(false);
-        showToast("Profile updated successfully!", "success");
+        showToast("Success: Profile updated successfully!", "success");
       } else {
-        const errMsg = result.data?.message || result.data?.error || "Update failed.";
-        setUpdateError(errMsg);
-        showToast("Failed to update profile", "error");
+        showToast("Failed: Server rejected the update.", "error");
       }
     } catch (err) {
-      setUpdateError("Failed to communicate with the server.");
-      showToast("Connection Error", "error");
+      showToast("Error: API Connection failed.", "error");
     } finally {
       setSubmitting(false);
     }
@@ -132,7 +127,7 @@ export default function ViewUser({ addLog, showToast }: { addLog: (log: ApiLog) 
             </div>
           </div>
 
-          <Button variant="outline" className="w-full" onClick={() => { setUpdateError(null); setIsUpdateModalOpen(true); }}>
+          <Button variant="outline" className="w-full" onClick={() => setIsUpdateModalOpen(true)}>
             Update Profile
           </Button>
         </Card>
@@ -184,8 +179,6 @@ export default function ViewUser({ addLog, showToast }: { addLog: (log: ApiLog) 
           <Input label="PS Number" value={updateForm.psNo} onChange={e => setUpdateForm({...updateForm, psNo: e.target.value})} />
           <Input label="Email Address" value={updateForm.email} onChange={e => setUpdateForm({...updateForm, email: e.target.value})} />
           
-          {updateError && <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-600 text-[11px] font-bold">⚠️ {updateError}</div>}
-
           <div className="pt-4 flex justify-end gap-3">
             <Button variant="flat" onClick={() => setIsUpdateModalOpen(false)}>Cancel</Button>
             <Button variant="gradient" onClick={handleUpdateUser} disabled={submitting}>

@@ -23,7 +23,6 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
   const [malaysiaTime, setMalaysiaTime] = useState('');
   const [malaysiaDate, setMalaysiaDate] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     name: '',
@@ -46,7 +45,6 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
 
   const handleCreateAppointment = async () => {
     setLoading(true);
-    setError(null);
     try {
       const cleanIc = form.icNo.trim();
       
@@ -59,13 +57,13 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
         status: 'PENDING'
       };
 
+      // Close immediately on submission to improve UX
+      setIsAddModalOpen(false);
+
       const result = await apiService.createNewUser(dto, addLog);
       
-      // Broader success check: If status is 200, we treat it as success regardless of body parsing issues.
-      // Google Apps Script responses can sometimes be tricky to parse.
-      const isSuccess = result.status >= 200 && result.status < 300;
-
-      if (isSuccess) {
+      // Robust success check - 200 OK is enough
+      if (result.status >= 200 && result.status < 300) {
         const newAppt: Appointment = {
           id: Math.random().toString(36).substring(7),
           name: dto.name,
@@ -76,17 +74,14 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
           status: 'PENDING'
         };
         setAppointments([newAppt, ...appointments]);
-        setIsAddModalOpen(false);
         setForm({ name: '', icNo: '', psNo: '', tcaDate: '', scheduleSupplyDate: '' });
-        showToast("Appointment created successfully!", "success");
+        showToast("Success: User created successfully!", "success");
       } else {
-        const errMsg = result.data?.message || result.data?.error || "Server rejected the request.";
-        setError(errMsg);
-        showToast("Failed to create appointment", "error");
+        showToast("Failed: Server rejected the request.", "error");
       }
     } catch (err) {
-      setError("Communication failed. The API might be unreachable.");
-      showToast("Connection Error", "error");
+      showToast("Error: API Connection failed.", "error");
+      // If communication failed, we might want to keep the form data but the modal is already closed
     } finally {
       setLoading(false);
     }
@@ -165,8 +160,6 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
             <Input label="TCA Date" type="date" value={form.tcaDate} onChange={e => setForm({...form, tcaDate: e.target.value})} />
             <Input label="Supply Date" type="date" value={form.scheduleSupplyDate} onChange={e => setForm({...form, scheduleSupplyDate: e.target.value})} />
           </div>
-
-          {error && <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-600 text-[11px] font-bold shadow-sm">⚠️ {error}</div>}
 
           <div className="flex justify-end gap-3 pt-4">
             <Button variant="flat" onClick={() => setIsAddModalOpen(false)}>Cancel</Button>
