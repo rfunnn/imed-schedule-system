@@ -63,8 +63,12 @@ export const apiService = {
     }
   },
 
+  async getAppointments(addLog: (log: ApiLog) => void) {
+    const url = `/api/appointments/list`;
+    return this.fetchWithLogging(url, { method: 'GET' }, addLog);
+  },
+
   async createNewUser(dto: CreateAppointmentNewUserDTO, addLog: (log: ApiLog) => void) {
-    // Standardized to flat /api/create-user path
     const url = `/api/create-user?icNo=${encodeURIComponent(dto.icNo)}&action=create-new-user`;
     return this.fetchWithLogging(url, {
       method: 'POST',
@@ -74,7 +78,6 @@ export const apiService = {
   },
 
   async updateUser(icNo: string, dto: any, addLog: (log: ApiLog) => void) {
-    // Standardized to flat /api/create-user path (which handles updates via action/headers)
     const url = `/api/create-user?icNo=${encodeURIComponent(icNo)}&action=update-user`;
     return this.fetchWithLogging(url, {
       method: 'POST',
@@ -87,7 +90,6 @@ export const apiService = {
   },
 
   async getUser(icNo: string, addLog: (log: ApiLog) => void) {
-    // Standardized to flat /api/get-user path
     const url = `/api/get-user?icNo=${encodeURIComponent(icNo)}&action=get-user`;
     return this.fetchWithLogging(url, {
       method: 'GET',
