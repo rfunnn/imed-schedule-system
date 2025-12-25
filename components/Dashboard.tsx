@@ -60,10 +60,13 @@ export default function Dashboard({ addLog }: { addLog: (log: ApiLog) => void })
       };
 
       const result = await apiService.createNewUser(dto, addLog);
-      
       const data = result.data;
-      // Many Google Scripts return success as a boolean or string inside the object
-      const isSuccess = result.ok && (data?.success === true || data?.status === 'success' || (typeof data === 'object' && !data.error && !data.message?.toLowerCase().includes('exist')));
+      
+      // Broader success check: if status is OK (200), and no explicit error message in data
+      const hasExplicitError = data && typeof data === 'object' && (data.error || (data.success === false) || (data.status === 'error'));
+      const isStringError = typeof data === 'string' && (data.toLowerCase().includes('error') || data.toLowerCase().includes('failed'));
+      
+      const isSuccess = result.ok && !hasExplicitError && !isStringError;
 
       if (isSuccess) {
         const newAppt: Appointment = {
@@ -79,7 +82,7 @@ export default function Dashboard({ addLog }: { addLog: (log: ApiLog) => void })
         setIsAddModalOpen(false);
         setForm({ name: '', icNo: '', psNo: '', tcaDate: '', scheduleSupplyDate: '' });
       } else {
-        setError(data?.message || data?.error || "The server rejected the request. Please check logs.");
+        setError(data?.message || data?.error || (typeof data === 'string' ? data : "The server rejected the request. Please check logs."));
       }
     } catch (err) {
       setError("Communication failed. The API might be unreachable.");

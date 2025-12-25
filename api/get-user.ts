@@ -1,5 +1,5 @@
 
-const EXTERNAL_URL = 'https://script.google.com/macros/s/AKfycbw9Fh4OCD99Q1PpLGe0JZnGTHA7aVA3Io_MdnxbQHOpsNSQbTXixYtOCYOn0YgjKCcos/exec';
+const EXTERNAL_URL = 'https://script.google.com/macros/s/AKfycbw9Fh4OCD99Q1PpLGe0JZnGTHA7aVA3IoMdnxbQHOpsNSQbTXixYtOCYOn0YgjKCcos/exec';
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -21,6 +21,7 @@ export default async function handler(req: any, res: any) {
     const apiKey = process.env.API_KEY;
     const params = new URLSearchParams();
     params.append('icNo', icNo as string);
+    params.append('action', 'get-user');
     if (apiKey) params.append('key', apiKey);
 
     const forwardedUrl = `${EXTERNAL_URL}?${params.toString()}`;
@@ -34,9 +35,9 @@ export default async function handler(req: any, res: any) {
     
     try {
       const data = JSON.parse(text);
-      res.status(response.status).json(data);
+      res.status(response.status || 200).json(data);
     } catch {
-      res.status(response.status).send(text);
+      res.status(response.status || 200).send(text);
     }
   } catch (error: any) {
     res.status(500).json({ error: error.message });

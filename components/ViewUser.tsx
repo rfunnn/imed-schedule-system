@@ -5,7 +5,6 @@ import { Button, Badge, Card, Dialog, Input } from './ui/Elements.tsx';
 import { ApiLog, Appointment, User } from '../types.ts';
 import { apiService } from '../services/apiService.ts';
 
-// Inline Icons to prevent missing dependency errors
 const ChevronLeftIcon = (props: any) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>;
 
 export default function ViewUser({ addLog }: { addLog: (log: ApiLog) => void }) {
@@ -17,13 +16,28 @@ export default function ViewUser({ addLog }: { addLog: (log: ApiLog) => void }) 
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
   const [updateForm, setUpdateForm] = useState({ name: '', psNo: '', email: '' });
   const [submitting, setSubmitting] = useState(false);
+  const [updateError, setUpdateError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchUser = async () => {
       setLoading(true);
       try {
-        // Simulate initial fetch with delay
-        setTimeout(() => {
+        // First try to get actual data
+        const result = await apiService.getUser(icNo || '', addLog);
+        if (result.ok && result.data && result.data.success) {
+          const d = result.data.data;
+          const fetchedUser: User = {
+            name: d.Name || d.name || 'Unknown Patient',
+            icNo: String(d.IC || d.icNo || icNo),
+            psNo: d['PS NO'] || d.psNo || '',
+            email: d.Email || d.email || ''
+          };
+          setUser(fetchedUser);
+          setUpdateForm({ name: fetchedUser.name, psNo: fetchedUser.psNo || '', email: fetchedUser.email || '' });
+          // If the API returns history, map it here
+          setAppointments([]); 
+        } else {
+          // Fallback mock if user not found or API fails
           const mockUser: User = {
             name: 'Ali Bin Ahmad',
             icNo: icNo || 'Unknown',
@@ -32,32 +46,41 @@ export default function ViewUser({ addLog }: { addLog: (log: ApiLog) => void }) 
           };
           setUser(mockUser);
           setUpdateForm({ name: mockUser.name, psNo: mockUser.psNo || '', email: mockUser.email || '' });
-          
           setAppointments([
             { id: '1', name: mockUser.name, icNo: mockUser.icNo, tcaDate: '2023-10-10', scheduleSupplyDate: '2023-10-17', status: 'COMPLETED', is_arrived: true, receivedDate: '2023-10-17' },
             { id: '2', name: mockUser.name, icNo: mockUser.icNo, tcaDate: '2023-11-20', scheduleSupplyDate: '2023-11-27', status: 'PENDING' },
           ]);
-          setLoading(false);
-        }, 800);
+        }
       } catch (err) {
         console.error(err);
+      } finally {
         setLoading(false);
       }
     };
     fetchUser();
-  }, [icNo]);
+  }, [icNo, addLog]);
 
   const handleUpdateUser = async () => {
     if (!user) return;
     setSubmitting(true);
+    setUpdateError(null);
     try {
       const result = await apiService.updateUser(user.icNo, updateForm, addLog);
-      if (result.ok) {
+      const data = result.data;
+
+      // Broadened success check
+      const hasExplicitError = data && typeof data === 'object' && (data.error || (data.success === false) || (data.status === 'error'));
+      const isStringError = typeof data === 'string' && (data.toLowerCase().includes('error') || data.toLowerCase().includes('failed'));
+      const isSuccess = result.ok && !hasExplicitError && !isStringError;
+
+      if (isSuccess) {
         setUser({ ...user, ...updateForm });
         setIsUpdateModalOpen(false);
+      } else {
+        setUpdateError(data?.message || data?.error || (typeof data === 'string' ? data : "Update failed."));
       }
     } catch (err) {
-      console.error(err);
+      setUpdateError("Failed to communicate with the server.");
     } finally {
       setSubmitting(false);
     }
@@ -111,7 +134,7 @@ export default function ViewUser({ addLog }: { addLog: (log: ApiLog) => void }) 
             </div>
           </div>
 
-          <Button variant="outline" className="w-full" onClick={() => setIsUpdateModalOpen(true)}>
+          <Button variant="outline" className="w-full" onClick={() => { setUpdateError(null); setIsUpdateModalOpen(true); }}>
             Update Profile
           </Button>
         </Card>
@@ -131,7 +154,7 @@ export default function ViewUser({ addLog }: { addLog: (log: ApiLog) => void }) 
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {appointments.map((appt) => (
+                {appointments.length > 0 ? appointments.map((appt) => (
                   <tr key={appt.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="px-6 py-4 text-sm font-medium text-slate-700">{appt.tcaDate}</td>
                     <td className="px-6 py-4 text-sm text-slate-600">{appt.scheduleSupplyDate}</td>
@@ -142,7 +165,11 @@ export default function ViewUser({ addLog }: { addLog: (log: ApiLog) => void }) 
                       </Badge>
                     </td>
                   </tr>
-                ))}
+                )) : (
+                  <tr>
+                    <td colSpan={4} className="px-6 py-8 text-center text-slate-400 text-sm italic">No history found for this patient.</td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -159,6 +186,8 @@ export default function ViewUser({ addLog }: { addLog: (log: ApiLog) => void }) 
           <Input label="PS Number" value={updateForm.psNo} onChange={e => setUpdateForm({...updateForm, psNo: e.target.value})} />
           <Input label="Email Address" value={updateForm.email} onChange={e => setUpdateForm({...updateForm, email: e.target.value})} />
           
+          {updateError && <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-600 text-[11px] font-bold">⚠️ {updateError}</div>}
+
           <div className="pt-4 flex justify-end gap-3">
             <Button variant="flat" onClick={() => setIsUpdateModalOpen(false)}>Cancel</Button>
             <Button variant="gradient" onClick={handleUpdateUser} disabled={submitting}>
