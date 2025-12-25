@@ -1,0 +1,5 @@
+{
+  "name": "iMed Schedule System",
+  "description": "A high-end medical appointment scheduling system with user management, appointment tracking, and real-time API integration logs.",
+  "requestFramePermissions": []
+}
