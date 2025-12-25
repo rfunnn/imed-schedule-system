@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Badge, Card, StatCard, Dialog, Input } from './ui/Elements.tsx';
 import { ApiLog, Appointment, CreateAppointmentNewUserDTO } from '../types.ts';
@@ -10,7 +10,7 @@ const CheckIcon = (props: any) => <svg {...props} fill="none" stroke="currentCol
 const UserIcon = (props: any) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>;
 const WarningIcon = (props: any) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>;
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 20;
 
 export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog) => void; showToast: (msg: string, type: 'success' | 'error') => void }) {
   const navigate = useNavigate();
@@ -22,7 +22,6 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
 
   const [form, setForm] = useState({
     name: '',
@@ -44,13 +43,12 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch initial data (All Users with Pagination)
-  const loadData = useCallback(async (page: number) => {
+  // Fetch data (The API currently returns all users, so we handle chunking locally)
+  const loadData = useCallback(async () => {
     setFetching(true);
     try {
-      const result = await apiService.getAppointments(addLog, page);
+      const result = await apiService.getAppointments(addLog, 1); // Get the main list
       if (result.ok && result.data) {
-        // Handle both direct array responses and object-wrapped data
         const rawData = Array.isArray(result.data.data) ? result.data.data : (Array.isArray(result.data) ? result.data : []);
         
         const mapped: Appointment[] = rawData.map((item: any) => ({
@@ -63,9 +61,6 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
           status: (item.status || 'PENDING') as any
         }));
         setAppointments(mapped);
-        
-        // If we received exactly PAGE_SIZE items, assume there might be more
-        setHasMore(mapped.length === PAGE_SIZE);
       } else {
         showToast("Notice: No live data found.", "error");
       }
@@ -78,16 +73,29 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
   }, [addLog, showToast]);
 
   useEffect(() => {
-    loadData(currentPage);
+    loadData();
+  }, [loadData]);
+
+  // Client-side pagination logic
+  const paginatedAppointments = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    const end = start + PAGE_SIZE;
+    return appointments.slice(start, end);
+  }, [appointments, currentPage]);
+
+  const totalPages = useMemo(() => {
+    return Math.max(1, Math.ceil(appointments.length / PAGE_SIZE));
+  }, [appointments]);
+
+  useEffect(() => {
     // Scroll to top of table or top of page when changing page
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [currentPage, loadData]);
+  }, [currentPage]);
 
   const handleCreateAppointment = async () => {
     setLoading(true);
     try {
       const cleanIc = form.icNo.trim();
-      
       const dto: CreateAppointmentNewUserDTO = {
         name: form.name.trim() || 'New Patient',
         icNo: cleanIc,
@@ -98,18 +106,12 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
       };
 
       setIsAddModalOpen(false);
-
       const result = await apiService.createNewUser(dto, addLog);
       
       if (result.status >= 200 && result.status < 300) {
         setForm({ name: '', icNo: '', psNo: '', tcaDate: '', scheduleSupplyDate: '' });
         showToast("Success: User created successfully!", "success");
-        // Reset to first page and refresh full list after successful creation
-        if (currentPage === 1) {
-          loadData(1);
-        } else {
-          setCurrentPage(1);
-        }
+        loadData(); // Refresh the list
       } else {
         showToast("Failed: Server rejected the request.", "error");
       }
@@ -121,7 +123,7 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
   };
 
   const handleNextPage = () => {
-    if (hasMore && !fetching) {
+    if (currentPage < totalPages && !fetching) {
       setCurrentPage(prev => prev + 1);
     }
   };
@@ -137,6 +139,23 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
       setCurrentPage(page);
     }
   };
+
+  // Generate page numbers to display
+  const pageNumbers = useMemo(() => {
+    const pages = [];
+    const maxVisiblePages = 5;
+    let start = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    let end = Math.min(totalPages, start + maxVisiblePages - 1);
+    
+    if (end - start + 1 < maxVisiblePages) {
+      start = Math.max(1, end - maxVisiblePages + 1);
+    }
+
+    for (let i = start; i <= end; i++) {
+      pages.push(i);
+    }
+    return pages;
+  }, [currentPage, totalPages]);
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8">
@@ -156,7 +175,7 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
       </header>
 
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Users (Current Page)" value={fetching ? "..." : String(appointments.length)} icon={UserIcon} color="bg-indigo-500" />
+        <StatCard title="Total Users" value={fetching ? "..." : String(appointments.length)} icon={UserIcon} color="bg-indigo-500" />
         <StatCard title="Today's Appointments" value={fetching ? "..." : String(appointments.filter(a => a.tcaDate === new Date().toISOString().split('T')[0]).length)} icon={CalendarIcon} color="bg-sky-500" />
         <StatCard title="Completed" value={fetching ? "..." : String(appointments.filter(a => a.status === 'COMPLETED').length)} icon={CheckIcon} color="bg-emerald-500" />
         <StatCard title="Pending" value={fetching ? "..." : String(appointments.filter(a => a.status === 'PENDING').length)} icon={WarningIcon} color="bg-amber-500" />
@@ -166,16 +185,16 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
         <div className="px-6 py-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4 bg-white/50">
           <div>
             <h2 className="text-lg font-bold text-slate-800">Patient Database</h2>
-            <p className="text-xs text-slate-500 mt-1">Page {currentPage} - Listing users and their last appointment status.</p>
+            <p className="text-xs text-slate-500 mt-1">Showing {appointments.length} total records. Page {currentPage} of {totalPages}.</p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => loadData(currentPage)} disabled={fetching}>
+            <Button variant="outline" size="sm" onClick={loadData} disabled={fetching}>
               {fetching ? (
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div>
                   Refreshing...
                 </div>
-              ) : 'Refresh Page'}
+              ) : 'Refresh Records'}
             </Button>
             <Button variant="gradient" size="sm" onClick={() => setIsAddModalOpen(true)}>+ Add Appointment</Button>
           </div>
@@ -199,7 +218,7 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {appointments.length > 0 ? appointments.map((appt) => (
+                  {paginatedAppointments.length > 0 ? paginatedAppointments.map((appt) => (
                     <tr key={appt.id} className="hover:bg-sky-50/50 transition-colors cursor-pointer group" onClick={() => navigate(`/view-user/${appt.icNo}`)}>
                       <td className="px-6 py-4">
                         <div className="font-semibold text-slate-700 group-hover:text-sky-700 transition-colors">{appt.name}</div>
@@ -211,7 +230,7 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
                     </tr>
                   )) : (
                     <tr>
-                      <td colSpan={4} className="px-6 py-12 text-center text-slate-400 italic">No patients found in this batch.</td>
+                      <td colSpan={4} className="px-6 py-12 text-center text-slate-400 italic">No patients found.</td>
                     </tr>
                   )}
                 </tbody>
@@ -220,44 +239,23 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
               {/* Pagination Footer */}
               <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div className="text-xs text-slate-500 font-medium">
-                  Showing {appointments.length} patients on page {currentPage}
+                  Showing records {Math.min(appointments.length, (currentPage - 1) * PAGE_SIZE + 1)} to {Math.min(appointments.length, currentPage * PAGE_SIZE)} of {appointments.length}
                 </div>
                 
                 <div className="flex items-center gap-4">
                   <div className="flex gap-1 items-center">
-                    {/* Page Numbering Buttons */}
-                    {currentPage > 1 && (
+                    {pageNumbers.map(page => (
                       <Button 
-                        variant="flat" 
+                        key={page}
+                        variant={currentPage === page ? "gradient" : "flat"} 
                         size="sm" 
                         className="w-8 h-8 p-0" 
-                        onClick={() => handlePageClick(currentPage - 1)}
+                        onClick={() => handlePageClick(page)}
                         disabled={fetching}
                       >
-                        {currentPage - 1}
+                        {page}
                       </Button>
-                    )}
-                    
-                    <Button 
-                      variant="gradient" 
-                      size="sm" 
-                      className="w-8 h-8 p-0" 
-                      disabled
-                    >
-                      {currentPage}
-                    </Button>
-                    
-                    {hasMore && (
-                      <Button 
-                        variant="flat" 
-                        size="sm" 
-                        className="w-8 h-8 p-0" 
-                        onClick={() => handlePageClick(currentPage + 1)}
-                        disabled={fetching}
-                      >
-                        {currentPage + 1}
-                      </Button>
-                    )}
+                    ))}
                   </div>
 
                   <div className="flex gap-2">
@@ -274,7 +272,7 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
                       variant="outline" 
                       size="sm" 
                       onClick={handleNextPage} 
-                      disabled={!hasMore || fetching}
+                      disabled={currentPage === totalPages || fetching}
                     >
                       <span className="mr-1 hidden sm:inline">Next</span>
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
