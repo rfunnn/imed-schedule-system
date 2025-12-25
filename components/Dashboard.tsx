@@ -79,6 +79,8 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
 
   useEffect(() => {
     loadData(currentPage);
+    // Scroll to top of table or top of page when changing page
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [currentPage, loadData]);
 
   const handleCreateAppointment = async () => {
@@ -127,6 +129,12 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
   const handlePrevPage = () => {
     if (currentPage > 1 && !fetching) {
       setCurrentPage(prev => prev - 1);
+    }
+  };
+
+  const handlePageClick = (page: number) => {
+    if (!fetching && page !== currentPage) {
+      setCurrentPage(page);
     }
   };
 
@@ -210,27 +218,68 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
               </table>
 
               {/* Pagination Footer */}
-              <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
+              <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div className="text-xs text-slate-500 font-medium">
                   Showing {appointments.length} patients on page {currentPage}
                 </div>
-                <div className="flex gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={handlePrevPage} 
-                    disabled={currentPage === 1 || fetching}
-                  >
-                    Previous
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={handleNextPage} 
-                    disabled={!hasMore || fetching}
-                  >
-                    Next
-                  </Button>
+                
+                <div className="flex items-center gap-4">
+                  <div className="flex gap-1 items-center">
+                    {/* Page Numbering Buttons */}
+                    {currentPage > 1 && (
+                      <Button 
+                        variant="flat" 
+                        size="sm" 
+                        className="w-8 h-8 p-0" 
+                        onClick={() => handlePageClick(currentPage - 1)}
+                        disabled={fetching}
+                      >
+                        {currentPage - 1}
+                      </Button>
+                    )}
+                    
+                    <Button 
+                      variant="gradient" 
+                      size="sm" 
+                      className="w-8 h-8 p-0" 
+                      disabled
+                    >
+                      {currentPage}
+                    </Button>
+                    
+                    {hasMore && (
+                      <Button 
+                        variant="flat" 
+                        size="sm" 
+                        className="w-8 h-8 p-0" 
+                        onClick={() => handlePageClick(currentPage + 1)}
+                        disabled={fetching}
+                      >
+                        {currentPage + 1}
+                      </Button>
+                    )}
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={handlePrevPage} 
+                      disabled={currentPage === 1 || fetching}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
+                      <span className="ml-1 hidden sm:inline">Prev</span>
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={handleNextPage} 
+                      disabled={!hasMore || fetching}
+                    >
+                      <span className="mr-1 hidden sm:inline">Next</span>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
+                    </Button>
+                  </div>
                 </div>
               </div>
             </>
