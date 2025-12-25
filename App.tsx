@@ -1,10 +1,10 @@
 
 import React, { useState, useCallback } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
-import Dashboard from './components/Dashboard';
-import ViewUser from './components/ViewUser';
-import LogPanel from './components/LogPanel';
-import { ApiLog } from './types';
+import Dashboard from './components/Dashboard.tsx';
+import ViewUser from './components/ViewUser.tsx';
+import LogPanel from './components/LogPanel.tsx';
+import { ApiLog } from './types.ts';
 
 function App() {
   const [logs, setLogs] = useState<ApiLog[]>([]);

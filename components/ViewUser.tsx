@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Button, Badge, Card, Dialog, Input } from './ui/Elements';
-import { ApiLog, Appointment, User } from '../types';
-import { apiService } from '../services/apiService';
+import { Button, Badge, Card, Dialog, Input } from './ui/Elements.tsx';
+import { ApiLog, Appointment, User } from '../types.ts';
+import { apiService } from '../services/apiService.ts';
 
 // Inline Icons to prevent missing dependency errors
 const ChevronLeftIcon = (props: any) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>;
