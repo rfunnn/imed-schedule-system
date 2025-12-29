@@ -1,5 +1,5 @@
 
-const EXTERNAL_URL = 'https://script.google.com/macros/s/AKfycbzPpOFwD4NwTNQo4OlebWmv9epewKiIrgzUDcVIcwvjsXiwc6oVvV9ADDJ0UV18JMIJ/exec';
+const EXTERNAL_URL = 'https://script.google.com/macros/s/AKfycbzWwmE9wuk9DdFO1OYEcNihaM0Wk5jhK-IW8COfFl2wpPtTaBxImmu3vI2ZZOdU5Lau/exec';
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
