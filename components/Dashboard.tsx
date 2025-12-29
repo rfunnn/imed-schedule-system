@@ -25,6 +25,7 @@ export default function Dashboard({ showToast }: { showToast: (msg: string, type
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalRecords, setTotalRecords] = useState(0);
+  const [apiError, setApiError] = useState<string | null>(null);
 
   // Lookup state
   const [searchOptions, setSearchOptions] = useState<Array<{ label: string; value: any }>>([]);
@@ -52,22 +53,34 @@ export default function Dashboard({ showToast }: { showToast: (msg: string, type
 
   const loadData = useCallback(async (page: number) => {
     setFetching(true);
+    setApiError(null);
     try {
       const result = await apiService.getAppointments(page, PAGE_SIZE);
+      
+      // Log for debugging "No records" issues
+      console.debug('[API Response]:', result);
+
       if (result.ok && result.data) {
+        // If the proxy returns an HTML string instead of JSON (common for Google errors)
+        if (typeof result.data === 'string' && result.data.trim().startsWith('<')) {
+          setApiError("The server returned an invalid response (HTML). Please check script permissions.");
+          setAppointments([]);
+          return;
+        }
+
         const pagination = result.data.pagination;
-        const rawData = result.data.data || [];
+        const rawData = result.data.data || (Array.isArray(result.data) ? result.data : []);
         
         if (pagination) {
           setTotalPages(pagination.totalPages || 1);
           setTotalRecords(pagination.total || 0);
-        } else if (Array.isArray(result.data)) {
-           setTotalRecords(result.data.length);
+        } else {
+           setTotalRecords(rawData.length);
            setTotalPages(1);
         }
 
-        const mapped: Appointment[] = (Array.isArray(rawData) ? rawData : (Array.isArray(result.data) ? result.data : [])).map((item: any) => ({
-          id: item.id || Math.random().toString(36).substring(7),
+        const mapped: Appointment[] = rawData.map((item: any) => ({
+          id: item.id || item.IC || Math.random().toString(36).substring(7),
           name: item.Name || item.name || 'Unknown',
           icNo: String(item.IC || item.icNo || ''),
           psNo: item.psNo || item['PS NO'],
@@ -77,10 +90,12 @@ export default function Dashboard({ showToast }: { showToast: (msg: string, type
           createdAt: item.createdAt || item['Created At'] || ''
         }));
         setAppointments(mapped);
+      } else {
+        setApiError("Connection failed or script returned an error.");
       }
     } catch (err) {
       console.error('Fetch error:', err);
-      showToast("Error loading patient records.", "error");
+      setApiError("System was unable to reach the medical database.");
     } finally {
       setFetching(false);
     }
@@ -100,6 +115,9 @@ export default function Dashboard({ showToast }: { showToast: (msg: string, type
         const res = await apiService.getUser(query);
         if (res.ok && res.data) {
           const d = res.data.data || res.data;
+          // Check for error strings
+          if (typeof d === 'string') return;
+          
           const icStr = String(d.IC || d.icNo || '');
           const nameStr = String(d.Name || d.name || '');
           const psStr = String(d['PS NO'] || d.psNo || '');
@@ -131,17 +149,15 @@ export default function Dashboard({ showToast }: { showToast: (msg: string, type
       let result;
 
       if (addTab === 'existing') {
-        // Update existing record
         result = await apiService.updateUser(rawIc, {
           tcaDate: form.tcaDate,
           scheduleSupplyDate: form.scheduleSupplyDate,
           status: 'PENDING'
         });
       } else {
-        // Create new user - MUST prepend single quote (') to preserve leading zeros in spreadsheets
         const dto: CreateAppointmentNewUserDTO = {
           name: String(form.name).trim() || 'New Patient',
-          icNo: "'" + rawIc,
+          icNo: "'" + rawIc, // Prepend quote for Excel/Google Sheets leading zeros
           psNo: form.psNo ? String(form.psNo).trim() : null,
           tcaDate: form.tcaDate || new Date().toISOString().split('T')[0],
           scheduleSupplyDate: form.scheduleSupplyDate || form.tcaDate || new Date().toISOString().split('T')[0],
@@ -150,7 +166,6 @@ export default function Dashboard({ showToast }: { showToast: (msg: string, type
         result = await apiService.createNewUser(dto);
       }
       
-      // Handle response - result.ok covers 200-299 status range
       if (result && result.ok) {
         setForm({ name: '', icNo: '', psNo: '', tcaDate: '', scheduleSupplyDate: '' });
         showToast(`Success: Patient ${addTab === 'existing' ? 'updated' : 'registered'} successfully!`, "success");
@@ -158,7 +173,7 @@ export default function Dashboard({ showToast }: { showToast: (msg: string, type
         setCurrentPage(1);
         loadData(1);
       } else {
-        const errMsg = result?.data?.message || result?.data || "Server rejected the request.";
+        const errMsg = result?.data?.message || (typeof result?.data === 'string' ? 'Invalid API response' : "Server rejected the request.");
         showToast(errMsg, "error");
       }
     } catch (err) {
@@ -211,10 +226,21 @@ export default function Dashboard({ showToast }: { showToast: (msg: string, type
         </div>
         
         <div className="overflow-x-auto min-h-[400px]">
-          {fetching && appointments.length === 0 ? (
+          {fetching ? (
             <div className="flex flex-col items-center justify-center h-80 space-y-6">
                <div className="w-16 h-16 border-4 border-sky-600 border-t-transparent rounded-full animate-spin"></div>
                <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">Syncing Medical Database...</p>
+            </div>
+          ) : apiError ? (
+            <div className="flex flex-col items-center justify-center h-80 space-y-4 px-6 text-center">
+              <div className="w-12 h-12 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center">
+                <WarningIcon className="w-6 h-6" />
+              </div>
+              <div>
+                <p className="text-slate-800 font-bold">API Connection Error</p>
+                <p className="text-sm text-slate-500 max-w-sm mx-auto mt-1">{apiError}</p>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => loadData(currentPage)}>Try Again</Button>
             </div>
           ) : (
             <div className="p-4">
@@ -241,18 +267,28 @@ export default function Dashboard({ showToast }: { showToast: (msg: string, type
                       </td>
                     </tr>
                   )) : (
-                    <tr><td colSpan={4} className="px-6 py-20 text-center text-slate-400 italic font-medium">No records found on this page.</td></tr>
+                    <tr>
+                      <td colSpan={4} className="px-6 py-24 text-center">
+                        <div className="flex flex-col items-center space-y-2">
+                           <UserIcon className="w-12 h-12 text-slate-200" />
+                           <p className="text-slate-400 font-medium italic">No patient records found on this page.</p>
+                           <p className="text-[10px] text-slate-300 uppercase tracking-widest">Database check complete</p>
+                        </div>
+                      </td>
+                    </tr>
                   )}
                 </tbody>
               </table>
 
-              <div className="mt-8 px-6 py-4 bg-slate-50 rounded-xl flex items-center justify-between">
-                <div className="text-xs font-black text-slate-400 uppercase tracking-widest">Page {currentPage} of {totalPages}</div>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} disabled={currentPage === 1}>Prev</Button>
-                  <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} disabled={currentPage === totalPages}>Next</Button>
+              {totalPages > 1 && (
+                <div className="mt-8 px-6 py-4 bg-slate-50 rounded-xl flex items-center justify-between">
+                  <div className="text-xs font-black text-slate-400 uppercase tracking-widest">Page {currentPage} of {totalPages}</div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} disabled={currentPage === 1}>Prev</Button>
+                    <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} disabled={currentPage === totalPages}>Next</Button>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
         </div>
