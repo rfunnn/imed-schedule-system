@@ -13,9 +13,13 @@ export default async function handler(req: any, res: any) {
   try {
     const body = req.body || {};
     const icNo = req.query.icNo || body.icNo;
-    // Standardize action handling
     let action = req.query.action || body.action || 'create-new-user';
     
+    // If the frontend specifically calls this for an update, ensure it works
+    if (action === 'update-user') {
+      body._method = 'PATCH';
+    }
+
     const params = new URLSearchParams();
     if (icNo) params.append('icNo', String(icNo));
     params.append('action', String(action));

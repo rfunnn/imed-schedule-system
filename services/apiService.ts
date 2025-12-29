@@ -34,7 +34,7 @@ export const apiService = {
   },
 
   async updateUser(icNo: string, dto: any) {
-    // Standardizing on the dedicated update endpoint
+    // We send a POST to our proxy, which will handle the _method: "PATCH" tunneling for Apps Script
     return this.request(`/api/appointments/update-user?icNo=${encodeURIComponent(icNo)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

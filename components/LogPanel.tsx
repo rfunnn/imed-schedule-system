@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
-import { ApiLog } from '../types';
+// Fixed: Using correct import path with .ts extension and resolved the missing member error
+import { ApiLog } from '../types.ts';
 
 export default function LogPanel({ logs }: { logs: ApiLog[] }) {
   const [isOpen, setIsOpen] = useState(false);

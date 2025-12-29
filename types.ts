@@ -52,7 +52,7 @@ export interface DownloadFormRequestDTO {
   fillBlankColumns: string[];
 }
 
-// Added ApiLog interface for system logging used in LogPanel component
+// Added ApiLog interface for system activity tracking to resolve the import error in LogPanel.tsx
 export interface ApiLog {
   id: string;
   timestamp: string | number | Date;
@@ -60,5 +60,5 @@ export interface ApiLog {
   method: string;
   url: string;
   status?: number;
-  body: any;
+  body?: any;
 }
