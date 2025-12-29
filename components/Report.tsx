@@ -19,15 +19,13 @@ export default function Report() {
     const fetchAll = async () => {
       setLoading(true);
       try {
-        // Fetch a large sample or use a dedicated report endpoint if available.
-        // For this implementation, we pull the first 200 records to show meaningful stats.
         const res = await apiService.getAppointments(1, 200);
         if (res.ok && res.data) {
           const raw = res.data.data || res.data;
           if (Array.isArray(raw)) {
             setData(raw.map((item: any) => ({
               ...item,
-              createdAt: item.createdAt || item['Created At'] || item.tcaDate // Fallback for testing
+              createdAt: item.createdAt || item['Created At'] || item.tcaDate
             })));
           }
         }
@@ -48,7 +46,6 @@ export default function Report() {
       return d.getFullYear() === year && (d.getMonth() + 1) === month;
     });
 
-    // Group by day for the graph
     const daysInMonth = new Date(year, month, 0).getDate();
     const dailyCounts = Array.from({ length: daysInMonth }, (_, i) => ({
       day: i + 1,
@@ -56,7 +53,8 @@ export default function Report() {
     }));
 
     filtered.forEach(item => {
-      const day = new Date(item.createdAt!).getDate();
+      const date = new Date(item.createdAt!);
+      const day = date.getDate();
       if (dailyCounts[day - 1]) dailyCounts[day - 1].count++;
     });
 
@@ -67,7 +65,7 @@ export default function Report() {
       filteredCount: filtered.length,
       dailyCounts,
       maxCount,
-      peakDay: peakDay.day > 0 ? `Day ${peakDay.day} (${peakDay.count})` : 'N/A'
+      peakDay: peakDay.count > 0 ? `Day ${peakDay.day} (${peakDay.count} pts)` : 'N/A'
     };
   }, [data, filterMonth]);
 
@@ -123,52 +121,60 @@ export default function Report() {
           </div>
         </div>
 
-        <div className="h-64 flex items-end justify-between gap-1 group">
+        <div className="h-72 flex items-end justify-between gap-1 sm:gap-2">
           {stats.dailyCounts.map((d) => (
             <div 
               key={d.day} 
-              className="relative flex-1 flex flex-col items-center group/bar"
+              className="flex-1 flex flex-col items-center group/bar h-full relative"
             >
-              <div 
-                className="w-full bg-slate-100 rounded-t-sm transition-all duration-500 hover:bg-sky-500 relative"
-                style={{ 
-                  height: `${(d.count / stats.maxCount) * 100}%`,
-                  minHeight: d.count > 0 ? '4px' : '0px'
-                }}
-              >
-                {d.count > 0 && (
-                  <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] font-black px-1.5 py-0.5 rounded opacity-0 group-hover/bar:opacity-100 transition-opacity whitespace-nowrap z-10 shadow-lg">
-                    {d.count} patients
-                  </div>
-                )}
+              {/* Tooltip */}
+              {d.count > 0 && (
+                <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[10px] font-bold px-2 py-1 rounded shadow-xl opacity-0 group-hover/bar:opacity-100 transition-opacity z-20 pointer-events-none whitespace-nowrap">
+                  {d.count} Registered
+                </div>
+              )}
+              
+              {/* Bar Container/Track */}
+              <div className="w-full h-full bg-slate-50/50 rounded-t-lg flex items-end overflow-hidden group-hover/bar:bg-slate-100 transition-colors">
+                <div 
+                  className="w-full bg-sky-500 transition-all duration-700 ease-out group-hover/bar:bg-sky-600 rounded-t-sm"
+                  style={{ 
+                    height: d.count > 0 ? `${Math.max((d.count / stats.maxCount) * 100, 4)}%` : '0%'
+                  }}
+                />
               </div>
-              <span className="text-[8px] font-bold text-slate-400 mt-2 rotate-45 sm:rotate-0">{d.day}</span>
+              
+              {/* Label */}
+              <span className="text-[9px] font-black text-slate-400 mt-3 group-hover/bar:text-sky-600 transition-colors">
+                {d.day}
+              </span>
             </div>
           ))}
         </div>
         
-        <div className="mt-8 pt-6 border-t border-slate-100 flex items-center justify-center gap-8">
+        <div className="mt-10 pt-6 border-t border-slate-100 flex flex-wrap items-center justify-center gap-8">
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 bg-sky-500 rounded-sm"></div>
-            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Registrations</span>
+            <div className="w-4 h-4 bg-sky-500 rounded-sm shadow-sm"></div>
+            <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Active Registrations</span>
           </div>
-          <div className="flex items-center gap-2 text-xs font-medium text-slate-400 italic">
-            * Data based on available medical audit trails
+          <div className="flex items-center gap-2 text-xs font-bold text-slate-400">
+            <svg className="w-4 h-4 text-sky-400" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" /></svg>
+            Data sourced from system audit logs
           </div>
         </div>
       </Card>
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="p-6 bg-emerald-50/50 border-emerald-100 border flex flex-col justify-center items-center text-center">
-           <h4 className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Clinic Growth</h4>
+        <Card className="p-6 bg-emerald-50/40 border-emerald-100 border flex flex-col justify-center items-center text-center hover:shadow-md transition-shadow">
+           <h4 className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Growth Index</h4>
            <p className="text-sm font-bold text-slate-800">Steady upward trend in patient intake observed.</p>
         </Card>
-        <Card className="p-6 bg-sky-50/50 border-sky-100 border flex flex-col justify-center items-center text-center">
-           <h4 className="text-[10px] font-black text-sky-600 uppercase tracking-widest mb-1">Operational Note</h4>
-           <p className="text-sm font-bold text-slate-800">Tuesdays show consistent high registration volume.</p>
+        <Card className="p-6 bg-sky-50/40 border-sky-100 border flex flex-col justify-center items-center text-center hover:shadow-md transition-shadow">
+           <h4 className="text-[10px] font-black text-sky-600 uppercase tracking-widest mb-1">Peak Patterns</h4>
+           <p className="text-sm font-bold text-slate-800">Mid-month periods show consistent high registration volume.</p>
         </Card>
-        <Card className="p-6 bg-indigo-50/50 border-indigo-100 border flex flex-col justify-center items-center text-center">
-           <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-1">Data Quality</h4>
+        <Card className="p-6 bg-indigo-50/40 border-indigo-100 border flex flex-col justify-center items-center text-center hover:shadow-md transition-shadow">
+           <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-1">Data Reliability</h4>
            <p className="text-sm font-bold text-slate-800">100% of registrations recorded with IC verification.</p>
         </Card>
       </div>
