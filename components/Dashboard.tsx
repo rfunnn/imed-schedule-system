@@ -118,30 +118,28 @@ export default function Dashboard({ showToast }: { showToast: (msg: string, type
   };
 
   const handleCreateAppointment = async () => {
-    // Ensure IC exists before proceeding
     if (!form.icNo) {
-      showToast("Please provide or select a patient IC number.", "error");
+      showToast("Please select or enter a patient IC number.", "error");
       return;
     }
     
     setLoading(true);
     try {
-      // Clean string handling for IC
-      const cleanIc = String(form.icNo).trim();
+      const rawIc = String(form.icNo).trim();
       let result;
 
       if (addTab === 'existing') {
-        // Explicitly update existing record
-        result = await apiService.updateUser(cleanIc, {
+        // Update existing record
+        result = await apiService.updateUser(rawIc, {
           tcaDate: form.tcaDate,
           scheduleSupplyDate: form.scheduleSupplyDate,
           status: 'PENDING'
         });
       } else {
-        // Register new user - pass ' at the front of IC for spreadsheet formatting
+        // Create new user - MUST prepend single quote (') to preserve leading zeros in spreadsheets
         const dto: CreateAppointmentNewUserDTO = {
           name: String(form.name).trim() || 'New Patient',
-          icNo: "'" + cleanIc,
+          icNo: "'" + rawIc,
           psNo: form.psNo ? String(form.psNo).trim() : null,
           tcaDate: form.tcaDate || new Date().toISOString().split('T')[0],
           scheduleSupplyDate: form.scheduleSupplyDate || form.tcaDate || new Date().toISOString().split('T')[0],
@@ -150,6 +148,7 @@ export default function Dashboard({ showToast }: { showToast: (msg: string, type
         result = await apiService.createNewUser(dto);
       }
       
+      // Handle response - result.ok covers 200-299 status range
       if (result && result.ok) {
         setForm({ name: '', icNo: '', psNo: '', tcaDate: '', scheduleSupplyDate: '' });
         showToast(`Success: Patient ${addTab === 'existing' ? 'updated' : 'registered'} successfully!`, "success");
@@ -157,11 +156,12 @@ export default function Dashboard({ showToast }: { showToast: (msg: string, type
         setCurrentPage(1);
         loadData(1);
       } else {
-        showToast(result?.data?.message || "Operation failed. Please try again.", "error");
+        const errMsg = result?.data?.message || result?.data || "Server rejected the request.";
+        showToast(errMsg, "error");
       }
     } catch (err) {
       console.error('Submission error:', err);
-      showToast("Network error: Could not reach the medical server.", "error");
+      showToast("API Connection failed. Please check your internet.", "error");
     } finally {
       setLoading(false);
     }
@@ -301,10 +301,7 @@ export default function Dashboard({ showToast }: { showToast: (msg: string, type
             <Button variant="flat" onClick={() => setIsAddModalOpen(false)}>Cancel</Button>
             <Button 
               variant="gradient" 
-              onClick={() => {
-                console.log("Submit clicked. Tab:", addTab, "IC:", form.icNo);
-                handleCreateAppointment();
-              }} 
+              onClick={handleCreateAppointment} 
               disabled={loading || !form.icNo}
             >
               {loading ? 'Processing...' : (addTab === 'existing' ? 'Update' : 'Register')}
