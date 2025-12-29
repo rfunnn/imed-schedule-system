@@ -58,13 +58,16 @@ export default function Report() {
       if (dailyCounts[day - 1]) dailyCounts[day - 1].count++;
     });
 
-    const maxCount = Math.max(...dailyCounts.map(d => d.count), 1);
+    const maxCount = Math.max(...dailyCounts.map(d => d.count), 0);
+    // Y-axis range should be slightly higher than peak for headroom
+    const yAxisMax = Math.max(Math.ceil(maxCount * 1.2), 5);
     const peakDay = dailyCounts.reduce((prev, current) => (prev.count > current.count) ? prev : current, { day: 0, count: 0 });
 
     return {
       filteredCount: filtered.length,
       dailyCounts,
       maxCount,
+      yAxisMax,
       peakDay: peakDay.count > 0 ? `Day ${peakDay.day} (${peakDay.count} pts)` : 'N/A'
     };
   }, [data, filterMonth]);
@@ -121,45 +124,66 @@ export default function Report() {
           </div>
         </div>
 
-        <div className="h-72 flex items-end justify-between gap-1 sm:gap-2">
-          {stats.dailyCounts.map((d) => (
-            <div 
-              key={d.day} 
-              className="flex-1 flex flex-col items-center group/bar h-full relative"
-            >
-              {/* Tooltip */}
-              {d.count > 0 && (
-                <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[10px] font-bold px-2 py-1 rounded shadow-xl opacity-0 group-hover/bar:opacity-100 transition-opacity z-20 pointer-events-none whitespace-nowrap">
-                  {d.count} Registered
-                </div>
-              )}
-              
-              {/* Bar Container/Track */}
-              <div className="w-full h-full bg-slate-50/50 rounded-t-lg flex items-end overflow-hidden group-hover/bar:bg-slate-100 transition-colors">
-                <div 
-                  className="w-full bg-sky-500 transition-all duration-700 ease-out group-hover/bar:bg-sky-600 rounded-t-sm"
-                  style={{ 
-                    height: d.count > 0 ? `${Math.max((d.count / stats.maxCount) * 100, 4)}%` : '0%'
-                  }}
-                />
+        {/* Chart Container */}
+        <div className="relative h-80 pt-6">
+          {/* Y-Axis Grid Lines */}
+          <div className="absolute inset-0 flex flex-col justify-between pointer-events-none pb-8">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="flex items-center gap-3 w-full">
+                <span className="w-6 text-[10px] font-bold text-slate-300 text-right">
+                  {Math.round(stats.yAxisMax * (1 - i / 4))}
+                </span>
+                <div className="flex-grow border-t border-slate-100/80"></div>
               </div>
-              
-              {/* Label */}
-              <span className="text-[9px] font-black text-slate-400 mt-3 group-hover/bar:text-sky-600 transition-colors">
-                {d.day}
-              </span>
-            </div>
-          ))}
+            ))}
+          </div>
+
+          {/* Bar Wrapper */}
+          <div className="relative h-full flex items-end justify-between gap-1 sm:gap-2 pb-8 ml-9">
+            {stats.dailyCounts.map((d) => {
+              const heightPercent = (d.count / stats.yAxisMax) * 100;
+              return (
+                <div 
+                  key={d.day} 
+                  className="flex-1 flex flex-col items-center group/bar h-full relative"
+                >
+                  {/* Tooltip */}
+                  {d.count > 0 && (
+                    <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[10px] font-bold px-2 py-1 rounded shadow-xl opacity-0 group-hover/bar:opacity-100 transition-opacity z-20 pointer-events-none whitespace-nowrap">
+                      {d.count} Registered
+                    </div>
+                  )}
+                  
+                  {/* Bar Container */}
+                  <div className="w-full h-full flex items-end overflow-visible group-hover/bar:bg-sky-50 transition-colors rounded-t-lg">
+                    <div 
+                      className="w-full bg-sky-500 transition-all duration-700 ease-out group-hover/bar:bg-sky-600 rounded-t-sm shadow-sm"
+                      style={{ 
+                        height: d.count > 0 ? `${Math.max(heightPercent, 2)}%` : '0%'
+                      }}
+                    />
+                  </div>
+                  
+                  {/* Label */}
+                  <div className="absolute top-full mt-2 w-full text-center">
+                    <span className="text-[9px] font-black text-slate-400 group-hover/bar:text-sky-600 transition-colors">
+                      {d.day}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
         
-        <div className="mt-10 pt-6 border-t border-slate-100 flex flex-wrap items-center justify-center gap-8">
+        <div className="mt-12 pt-6 border-t border-slate-100 flex flex-wrap items-center justify-center gap-8">
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 bg-sky-500 rounded-sm shadow-sm"></div>
             <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Active Registrations</span>
           </div>
           <div className="flex items-center gap-2 text-xs font-bold text-slate-400">
             <svg className="w-4 h-4 text-sky-400" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" /></svg>
-            Data sourced from system audit logs
+            Audit trails updated in real-time
           </div>
         </div>
       </Card>
