@@ -26,6 +26,7 @@ export interface Appointment {
   is_arrived?: boolean;
   receivedDate?: string;
   initial?: string;
+  createdAt?: string;
 }
 
 export interface CreateAppointmentNewUserDTO {
@@ -52,7 +53,6 @@ export interface DownloadFormRequestDTO {
   fillBlankColumns: string[];
 }
 
-// Added ApiLog interface for system activity tracking to resolve the import error in LogPanel.tsx
 export interface ApiLog {
   id: string;
   timestamp: string | number | Date;

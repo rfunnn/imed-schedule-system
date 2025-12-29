@@ -3,6 +3,7 @@ import React, { useState, useCallback } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Dashboard from './components/Dashboard.tsx';
 import ViewUser from './components/ViewUser.tsx';
+import Report from './components/Report.tsx';
 import { Toast } from './components/ui/Elements.tsx';
 
 function App() {
@@ -27,6 +28,7 @@ function App() {
           <Routes>
             <Route path="/dashboard" element={<Dashboard showToast={showToast} />} />
             <Route path="/view-user/:icNo" element={<ViewUser showToast={showToast} />} />
+            <Route path="/report" element={<Report />} />
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
           </Routes>
         </main>
