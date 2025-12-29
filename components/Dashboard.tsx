@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Badge, Card, StatCard, Dialog, Input, SearchableSelect } from './ui/Elements.tsx';
-import { ApiLog, Appointment, CreateAppointmentNewUserDTO } from '../types.ts';
+import { Appointment, CreateAppointmentNewUserDTO } from '../types.ts';
 import { apiService } from '../services/apiService.ts';
 
 const CalendarIcon = (props: any) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>;
@@ -11,7 +12,7 @@ const WarningIcon = (props: any) => <svg {...props} fill="none" stroke="currentC
 
 const PAGE_SIZE = 20;
 
-export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog) => void; showToast: (msg: string, type: 'success' | 'error') => void }) {
+export default function Dashboard({ showToast }: { showToast: (msg: string, type: 'success' | 'error') => void }) {
   const navigate = useNavigate();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -51,7 +52,7 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
   const loadData = useCallback(async (page: number) => {
     setFetching(true);
     try {
-      const result = await apiService.getAppointments(addLog, page, PAGE_SIZE);
+      const result = await apiService.getAppointments(page, PAGE_SIZE);
       if (result.ok && result.data) {
         const pagination = result.data.pagination;
         const rawData = result.data.data || [];
@@ -78,7 +79,7 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
     } finally {
       setFetching(false);
     }
-  }, [addLog, showToast]);
+  }, [showToast]);
 
   useEffect(() => {
     loadData(currentPage);
@@ -91,8 +92,8 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
     setSearchingUser(true);
     searchTimeoutRef.current = window.setTimeout(async () => {
       try {
-        const res = await apiService.getUser(query, addLog);
-        if (res.ok && res.data && (res.data.success || res.status === 200)) {
+        const res = await apiService.getUser(query);
+        if (res.ok && res.data) {
           const d = res.data.data || res.data;
           setSearchOptions([{ 
             label: `${d.IC || d.icNo} — ${d.Name || d.name}`, 
@@ -120,7 +121,7 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
           tcaDate: form.tcaDate,
           scheduleSupplyDate: form.scheduleSupplyDate,
           status: 'PENDING'
-        }, addLog);
+        });
       } else {
         const dto: CreateAppointmentNewUserDTO = {
           name: form.name.trim() || 'New Patient',
@@ -130,7 +131,7 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
           scheduleSupplyDate: form.scheduleSupplyDate || form.tcaDate || new Date().toISOString().split('T')[0],
           status: 'PENDING'
         };
-        result = await apiService.createNewUser(dto, addLog);
+        result = await apiService.createNewUser(dto);
       }
       
       if (result.status >= 200 && result.status < 300) {
@@ -236,8 +237,8 @@ export default function Dashboard({ addLog, showToast }: { addLog: (log: ApiLog)
       <Dialog open={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} title="Patient Service Enrollment" size="md">
         <div className="space-y-6">
           <div className="flex p-1 bg-slate-100 rounded-xl">
-            <button className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-lg ${addTab === 'existing' ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-400'}`} onClick={() => setAddTab('existing')}>Existing Record</button>
-            <button className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-lg ${addTab === 'new' ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-400'}`} onClick={() => setAddTab('new')}>New Registration</button>
+            <button className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-lg ${addTab === 'existing' ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-400'}`} onClick={() => { setAddTab('existing'); setForm({ ...form, icNo: '', name: '' }); setSearchOptions([]); }}>Existing Record</button>
+            <button className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-lg ${addTab === 'new' ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-400'}`} onClick={() => { setAddTab('new'); setForm({ ...form, icNo: '', name: '' }); }}>New Registration</button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">

@@ -52,12 +52,13 @@ export interface DownloadFormRequestDTO {
   fillBlankColumns: string[];
 }
 
+// Added ApiLog interface for system logging used in LogPanel component
 export interface ApiLog {
   id: string;
-  timestamp: string;
+  timestamp: string | number | Date;
+  direction: 'OUTGOING' | 'INCOMING';
   method: string;
   url: string;
-  direction: 'INCOMING' | 'OUTGOING';
   status?: number;
   body: any;
 }

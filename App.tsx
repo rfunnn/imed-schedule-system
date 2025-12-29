@@ -3,17 +3,10 @@ import React, { useState, useCallback } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Dashboard from './components/Dashboard.tsx';
 import ViewUser from './components/ViewUser.tsx';
-import LogPanel from './components/LogPanel.tsx';
 import { Toast } from './components/ui/Elements.tsx';
-import { ApiLog } from './types.ts';
 
 function App() {
-  const [logs, setLogs] = useState<ApiLog[]>([]);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-
-  const addLog = useCallback((log: ApiLog) => {
-    setLogs(prev => [log, ...prev].slice(0, 100)); // Keep last 100 logs
-  }, []);
 
   const showToast = useCallback((message: string, type: 'success' | 'error') => {
     setToast({ message, type });
@@ -21,7 +14,7 @@ function App() {
 
   return (
     <HashRouter>
-      <div className="flex flex-col min-h-screen relative">
+      <div className="flex flex-col min-h-screen relative bg-slate-50">
         {toast && (
           <Toast 
             message={toast.message} 
@@ -30,18 +23,13 @@ function App() {
           />
         )}
         
-        <main className="flex-grow pb-24">
+        <main className="flex-grow">
           <Routes>
-            <Route path="/dashboard" element={<Dashboard addLog={addLog} showToast={showToast} />} />
-            <Route path="/view-user/:icNo" element={<ViewUser addLog={addLog} showToast={showToast} />} />
+            <Route path="/dashboard" element={<Dashboard showToast={showToast} />} />
+            <Route path="/view-user/:icNo" element={<ViewUser showToast={showToast} />} />
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
           </Routes>
         </main>
-        
-        {/* Sticky Log Panel for debugging */}
-        <div className="fixed bottom-0 left-0 right-0 z-50">
-          <LogPanel logs={logs} />
-        </div>
       </div>
     </HashRouter>
   );

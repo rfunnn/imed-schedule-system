@@ -1,98 +1,50 @@
 
 import { 
-  ApiLog, 
   CreateAppointmentNewUserDTO, 
 } from '../types.ts';
 
 export const apiService = {
-  async fetchWithLogging(
-    url: string,
-    options: RequestInit,
-    addLog: (log: ApiLog) => void
-  ) {
-    const logId = Math.random().toString(36).substring(7);
-    
-    let logBody = null;
-    try {
-      logBody = options.body ? JSON.parse(options.body as string) : null;
-    } catch (e) {
-      logBody = { raw: options.body };
-    }
-
-    addLog({
-      id: logId + '-out',
-      timestamp: new Date().toISOString(),
-      method: options.method || 'GET',
-      url: url,
-      direction: 'OUTGOING',
-      body: logBody,
-    });
-
+  async request(url: string, options: RequestInit) {
     try {
       const response = await fetch(url, options);
       const text = await response.text();
       let data;
-      
       try {
         data = JSON.parse(text);
       } catch {
         data = text;
       }
-
-      addLog({
-        id: logId + '-in',
-        timestamp: new Date().toISOString(),
-        method: options.method || 'GET',
-        url: url,
-        direction: 'INCOMING',
-        status: response.status,
-        body: data,
-      });
-
       return { data, status: response.status, ok: response.ok };
     } catch (error) {
-      addLog({
-        id: logId + '-err',
-        timestamp: new Date().toISOString(),
-        method: options.method || 'GET',
-        url: url,
-        direction: 'INCOMING',
-        body: { error: String(error) },
-      });
+      console.error(`API Request Error [${url}]:`, error);
       throw error;
     }
   },
 
-  async getAppointments(addLog: (log: ApiLog) => void, page: number = 1, pageSize: number = 20) {
-    const url = `/api/appointments/list?page=${page}&pageSize=${pageSize}`;
-    return this.fetchWithLogging(url, { method: 'GET' }, addLog);
+  async getAppointments(page: number = 1, pageSize: number = 20) {
+    return this.request(`/api/appointments/list?page=${page}&pageSize=${pageSize}`, { method: 'GET' });
   },
 
-  async createNewUser(dto: CreateAppointmentNewUserDTO, addLog: (log: ApiLog) => void) {
-    const url = `/api/create-user?icNo=${encodeURIComponent(dto.icNo)}&action=create-new-user`;
-    return this.fetchWithLogging(url, {
+  async createNewUser(dto: CreateAppointmentNewUserDTO) {
+    return this.request(`/api/appointments/create-new-user`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...dto, action: 'create-new-user' }),
-    }, addLog);
+      body: JSON.stringify(dto),
+    });
   },
 
-  async updateUser(icNo: string, dto: any, addLog: (log: ApiLog) => void) {
-    const url = `/api/create-user?icNo=${encodeURIComponent(icNo)}&action=update-user`;
-    return this.fetchWithLogging(url, {
+  async updateUser(icNo: string, dto: any) {
+    // Standardizing on the dedicated update endpoint
+    return this.request(`/api/appointments/update-user?icNo=${encodeURIComponent(icNo)}`, {
       method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'X-HTTP-Method-Override': 'PATCH'
-      },
-      body: JSON.stringify({ ...dto, _method: 'PATCH', action: 'update-user', icNo }),
-    }, addLog);
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(dto),
+    });
   },
 
-  async getUser(icNo: string, addLog: (log: ApiLog) => void) {
-    const url = `/api/get-user?icNo=${encodeURIComponent(icNo)}&action=get-user`;
-    return this.fetchWithLogging(url, {
+  async getUser(icNo: string) {
+    return this.request(`/api/appointments/get-user?icNo=${encodeURIComponent(icNo)}`, {
       method: 'GET',
-    }, addLog);
+    });
   }
 };

@@ -2,12 +2,12 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button, Badge, Card, Dialog, Input } from './ui/Elements.tsx';
-import { ApiLog, Appointment, User } from '../types.ts';
+import { Appointment, User } from '../types.ts';
 import { apiService } from '../services/apiService.ts';
 
 const ChevronLeftIcon = (props: any) => <svg {...props} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>;
 
-export default function ViewUser({ addLog, showToast }: { addLog: (log: ApiLog) => void; showToast: (msg: string, type: 'success' | 'error') => void }) {
+export default function ViewUser({ showToast }: { showToast: (msg: string, type: 'success' | 'error') => void }) {
   const { icNo } = useParams<{ icNo: string }>();
   const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(null);
@@ -21,8 +21,8 @@ export default function ViewUser({ addLog, showToast }: { addLog: (log: ApiLog) 
     const fetchUser = async () => {
       setLoading(true);
       try {
-        const result = await apiService.getUser(icNo || '', addLog);
-        if (result.ok && result.data && (result.data.success || result.status === 200)) {
+        const result = await apiService.getUser(icNo || '');
+        if (result.ok && result.data) {
           const d = result.data.data || result.data;
           const fetchedUser: User = {
             name: d.Name || d.name || 'Unknown Patient',
@@ -32,21 +32,10 @@ export default function ViewUser({ addLog, showToast }: { addLog: (log: ApiLog) 
           };
           setUser(fetchedUser);
           setUpdateForm({ name: fetchedUser.name, psNo: fetchedUser.psNo || '', email: fetchedUser.email || '' });
-          setAppointments([]); 
-        } else {
-          // Fallback mock
-          const mockUser: User = {
-            name: 'Ali Bin Ahmad',
-            icNo: icNo || 'Unknown',
-            psNo: 'MS-55001',
-            email: 'ali.ahmad@email.com'
-          };
-          setUser(mockUser);
-          setUpdateForm({ name: mockUser.name, psNo: mockUser.psNo || '', email: mockUser.email || '' });
-          setAppointments([
-            { id: '1', name: mockUser.name, icNo: mockUser.icNo, tcaDate: '2023-10-10', scheduleSupplyDate: '2023-10-17', status: 'COMPLETED', is_arrived: true, receivedDate: '2023-10-17' },
-            { id: '2', name: mockUser.name, icNo: mockUser.icNo, tcaDate: '2023-11-20', scheduleSupplyDate: '2023-11-27', status: 'PENDING' },
-          ]);
+          
+          if (Array.isArray(d.appointments)) {
+             setAppointments(d.appointments);
+          }
         }
       } catch (err) {
         console.error(err);
@@ -55,17 +44,14 @@ export default function ViewUser({ addLog, showToast }: { addLog: (log: ApiLog) 
       }
     };
     fetchUser();
-  }, [icNo, addLog]);
+  }, [icNo]);
 
   const handleUpdateUser = async () => {
     if (!user) return;
     setSubmitting(true);
     try {
-      // Close immediately on submission
       setIsUpdateModalOpen(false);
-      
-      const result = await apiService.updateUser(user.icNo, updateForm, addLog);
-      
+      const result = await apiService.updateUser(user.icNo, updateForm);
       if (result.status >= 200 && result.status < 300) {
         setUser({ ...user, ...updateForm });
         showToast("Success: Profile updated successfully!", "success");

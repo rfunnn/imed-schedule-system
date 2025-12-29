@@ -1,9 +1,10 @@
+
 const EXTERNAL_URL = 'https://script.google.com/macros/s/AKfycbxaOJydyTkze3rYZ3s-5ta_Mg79bfGMXOEenruRl2E2wgh6SSI0tK_qWcc7HB6JqK0d/exec';
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-HTTP-Method-Override');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') {
     return res.status(204).end();
@@ -12,36 +13,22 @@ export default async function handler(req: any, res: any) {
   try {
     const body = req.body || {};
     const icNo = req.query.icNo || body.icNo;
-    const headerOverride = req.headers['x-http-method-override'];
-    
-    let action = req.query.action || body.action;
-    if (!action) {
-      if (headerOverride?.toUpperCase() === 'PATCH' || body._method === 'PATCH') {
-        action = 'update-user';
-      } else {
-        action = 'create-new-user';
-      }
-    }
+    // Standardize action handling
+    let action = req.query.action || body.action || 'create-new-user';
     
     const params = new URLSearchParams();
     if (icNo) params.append('icNo', String(icNo));
-    if (action) params.append('action', String(action));
+    params.append('action', String(action));
     
     const forwardedUrl = `${EXTERNAL_URL}?${params.toString()}`;
 
-    const forwardHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (action === 'update-user' || headerOverride === 'PATCH') {
-      forwardHeaders['X-HTTP-Method-Override'] = 'PATCH';
-    }
-
     const response = await fetch(forwardedUrl, {
       method: 'POST',
-      headers: forwardHeaders,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...body, action, icNo }),
     });
 
     const text = await response.text();
-    
     try {
       const data = JSON.parse(text);
       res.status(response.status || 200).json(data);
