@@ -60,9 +60,13 @@ export default function Dashboard({ showToast }: { showToast: (msg: string, type
         if (pagination) {
           setTotalPages(pagination.totalPages || 1);
           setTotalRecords(pagination.total || 0);
+        } else if (Array.isArray(result.data)) {
+           // Handle cases where data is returned as a simple array
+           setTotalRecords(result.data.length);
+           setTotalPages(1);
         }
 
-        const mapped: Appointment[] = rawData.map((item: any) => ({
+        const mapped: Appointment[] = (Array.isArray(rawData) ? rawData : (Array.isArray(result.data) ? result.data : [])).map((item: any) => ({
           id: item.id || Math.random().toString(36).substring(7),
           name: item.Name || item.name || 'Unknown',
           icNo: String(item.IC || item.icNo || ''),
@@ -95,9 +99,14 @@ export default function Dashboard({ showToast }: { showToast: (msg: string, type
         const res = await apiService.getUser(query);
         if (res.ok && res.data) {
           const d = res.data.data || res.data;
+          // Ensure IC is a string to avoid .trim() issues later
+          const icStr = String(d.IC || d.icNo || '');
+          const nameStr = String(d.Name || d.name || '');
+          const psStr = String(d['PS NO'] || d.psNo || '');
+          
           setSearchOptions([{ 
-            label: `${d.IC || d.icNo} — ${d.Name || d.name}`, 
-            value: { name: d.Name || d.name, icNo: d.IC || d.icNo, psNo: d['PS NO'] || d.psNo } 
+            label: `${icStr} — ${nameStr}`, 
+            value: { name: nameStr, icNo: icStr, psNo: psStr } 
           }]);
         } else {
           setSearchOptions([]);
@@ -111,9 +120,11 @@ export default function Dashboard({ showToast }: { showToast: (msg: string, type
   };
 
   const handleCreateAppointment = async () => {
+    if (!form.icNo) return;
     setLoading(true);
     try {
-      const cleanIc = form.icNo.trim();
+      // Robust string handling for IC to prevent .trim() failures on numeric values
+      const cleanIc = String(form.icNo).trim();
       let result;
 
       if (addTab === 'existing') {
@@ -124,9 +135,9 @@ export default function Dashboard({ showToast }: { showToast: (msg: string, type
         });
       } else {
         const dto: CreateAppointmentNewUserDTO = {
-          name: form.name.trim() || 'New Patient',
+          name: String(form.name).trim() || 'New Patient',
           icNo: cleanIc,
-          psNo: form.psNo.trim() || null,
+          psNo: form.psNo ? String(form.psNo).trim() : null,
           tcaDate: form.tcaDate || new Date().toISOString().split('T')[0],
           scheduleSupplyDate: form.scheduleSupplyDate || form.tcaDate || new Date().toISOString().split('T')[0],
           status: 'PENDING'
@@ -134,16 +145,17 @@ export default function Dashboard({ showToast }: { showToast: (msg: string, type
         result = await apiService.createNewUser(dto);
       }
       
-      if (result.status >= 200 && result.status < 300) {
+      if (result && result.status >= 200 && result.status < 300) {
         setForm({ name: '', icNo: '', psNo: '', tcaDate: '', scheduleSupplyDate: '' });
-        showToast(`Success: Appointment processed!`, "success");
+        showToast(`Success: Appointment ${addTab === 'existing' ? 'updated' : 'processed'}!`, "success");
         setIsAddModalOpen(false);
         setCurrentPage(1);
         loadData(1);
       } else {
-        showToast("Server rejected the request.", "error");
+        showToast(result?.data?.message || "Server rejected the request.", "error");
       }
     } catch (err) {
+      console.error('Submission error:', err);
       showToast("API Connection failed.", "error");
     } finally {
       setLoading(false);
@@ -249,7 +261,12 @@ export default function Dashboard({ showToast }: { showToast: (msg: string, type
                   loading={searchingUser}
                   options={searchOptions}
                   onSearch={handleSearchUser}
-                  onChange={(val) => setForm({ ...form, icNo: val.icNo, name: val.name, psNo: val.psNo || '' })}
+                  onChange={(val) => setForm({ 
+                    ...form, 
+                    icNo: String(val.icNo), 
+                    name: String(val.name), 
+                    psNo: val.psNo ? String(val.psNo) : '' 
+                  })}
                 />
               </div>
             ) : (
@@ -268,7 +285,7 @@ export default function Dashboard({ showToast }: { showToast: (msg: string, type
           <div className="flex justify-end gap-3 pt-6 border-t">
             <Button variant="flat" onClick={() => setIsAddModalOpen(false)}>Cancel</Button>
             <Button variant="gradient" onClick={handleCreateAppointment} disabled={loading || !form.icNo}>
-              {loading ? 'Submitting...' : 'Register'}
+              {loading ? 'Submitting...' : (addTab === 'existing' ? 'Update' : 'Register')}
             </Button>
           </div>
         </div>
