@@ -1,4 +1,4 @@
-const EXTERNAL_URL = 'https://script.google.com/macros/s/AKfycbziydfndSqOA3neXX6zmSeykWsYJ7OpatS9jFIVxxdVCAYCkji9XJw7E2PmQvkhxapI/exec';
+const EXTERNAL_URL = 'https://script.google.com/macros/s/AKfycbwwAYYDjyZfKiIQ2fLnxRgfsKBtv1g7GVJMxMz2ydJdk6sLqzuHjlKWDy4dklaESTry/exec';
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') return res.status(405).end();
