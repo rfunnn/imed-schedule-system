@@ -61,7 +61,6 @@ export default function Dashboard({ showToast }: { showToast: (msg: string, type
           setTotalPages(pagination.totalPages || 1);
           setTotalRecords(pagination.total || 0);
         } else if (Array.isArray(result.data)) {
-           // Handle cases where data is returned as a simple array
            setTotalRecords(result.data.length);
            setTotalPages(1);
         }
@@ -99,7 +98,6 @@ export default function Dashboard({ showToast }: { showToast: (msg: string, type
         const res = await apiService.getUser(query);
         if (res.ok && res.data) {
           const d = res.data.data || res.data;
-          // Ensure IC is a string to avoid .trim() issues later
           const icStr = String(d.IC || d.icNo || '');
           const nameStr = String(d.Name || d.name || '');
           const psStr = String(d['PS NO'] || d.psNo || '');
@@ -120,23 +118,30 @@ export default function Dashboard({ showToast }: { showToast: (msg: string, type
   };
 
   const handleCreateAppointment = async () => {
-    if (!form.icNo) return;
+    // Ensure IC exists before proceeding
+    if (!form.icNo) {
+      showToast("Please provide or select a patient IC number.", "error");
+      return;
+    }
+    
     setLoading(true);
     try {
-      // Robust string handling for IC to prevent .trim() failures on numeric values
+      // Clean string handling for IC
       const cleanIc = String(form.icNo).trim();
       let result;
 
       if (addTab === 'existing') {
+        // Explicitly update existing record
         result = await apiService.updateUser(cleanIc, {
           tcaDate: form.tcaDate,
           scheduleSupplyDate: form.scheduleSupplyDate,
           status: 'PENDING'
         });
       } else {
+        // Register new user - pass ' at the front of IC for spreadsheet formatting
         const dto: CreateAppointmentNewUserDTO = {
           name: String(form.name).trim() || 'New Patient',
-          icNo: cleanIc,
+          icNo: "'" + cleanIc,
           psNo: form.psNo ? String(form.psNo).trim() : null,
           tcaDate: form.tcaDate || new Date().toISOString().split('T')[0],
           scheduleSupplyDate: form.scheduleSupplyDate || form.tcaDate || new Date().toISOString().split('T')[0],
@@ -145,18 +150,18 @@ export default function Dashboard({ showToast }: { showToast: (msg: string, type
         result = await apiService.createNewUser(dto);
       }
       
-      if (result && result.status >= 200 && result.status < 300) {
+      if (result && result.ok) {
         setForm({ name: '', icNo: '', psNo: '', tcaDate: '', scheduleSupplyDate: '' });
-        showToast(`Success: Appointment ${addTab === 'existing' ? 'updated' : 'processed'}!`, "success");
+        showToast(`Success: Patient ${addTab === 'existing' ? 'updated' : 'registered'} successfully!`, "success");
         setIsAddModalOpen(false);
         setCurrentPage(1);
         loadData(1);
       } else {
-        showToast(result?.data?.message || "Server rejected the request.", "error");
+        showToast(result?.data?.message || "Operation failed. Please try again.", "error");
       }
     } catch (err) {
       console.error('Submission error:', err);
-      showToast("API Connection failed.", "error");
+      showToast("Network error: Could not reach the medical server.", "error");
     } finally {
       setLoading(false);
     }
@@ -249,8 +254,18 @@ export default function Dashboard({ showToast }: { showToast: (msg: string, type
       <Dialog open={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} title="Patient Service Enrollment" size="md">
         <div className="space-y-6">
           <div className="flex p-1 bg-slate-100 rounded-xl">
-            <button className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-lg ${addTab === 'existing' ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-400'}`} onClick={() => { setAddTab('existing'); setForm({ ...form, icNo: '', name: '' }); setSearchOptions([]); }}>Existing Record</button>
-            <button className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-lg ${addTab === 'new' ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-400'}`} onClick={() => { setAddTab('new'); setForm({ ...form, icNo: '', name: '' }); }}>New Registration</button>
+            <button 
+              className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${addTab === 'existing' ? 'bg-white text-sky-600 shadow-md' : 'text-slate-400 hover:text-slate-600'}`} 
+              onClick={() => { setAddTab('existing'); setForm({ ...form, icNo: '', name: '' }); setSearchOptions([]); }}
+            >
+              Existing Record
+            </button>
+            <button 
+              className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${addTab === 'new' ? 'bg-white text-sky-600 shadow-md' : 'text-slate-400 hover:text-slate-600'}`} 
+              onClick={() => { setAddTab('new'); setForm({ ...form, icNo: '', name: '' }); }}
+            >
+              New Registration
+            </button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -271,21 +286,28 @@ export default function Dashboard({ showToast }: { showToast: (msg: string, type
               </div>
             ) : (
               <>
-                <Input label="Full Patient Name" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
-                <Input label="NRIC Number" value={form.icNo} onChange={e => setForm({...form, icNo: e.target.value})} />
+                <Input label="Full Patient Name" placeholder="e.g. MOHD AZRI BIN ALI" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
+                <Input label="NRIC Number" placeholder="e.g. 900101011234" value={form.icNo} onChange={e => setForm({...form, icNo: e.target.value})} />
               </>
             )}
-            <Input label="PS Number" placeholder="MS-XXXXX" value={form.psNo} onChange={e => setForm({...form, psNo: e.target.value})} />
+            <Input label="PS Number" placeholder="e.g. KL-DRIFT123" value={form.psNo} onChange={e => setForm({...form, psNo: e.target.value})} />
             <Input label="Review Date (TCA)" type="date" value={form.tcaDate} onChange={e => setForm({...form, tcaDate: e.target.value})} />
             <div className="col-span-2">
               <Input label="Medication Supply Date" type="date" value={form.scheduleSupplyDate} onChange={e => setForm({...form, scheduleSupplyDate: e.target.value})} />
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 pt-6 border-t">
+          <div className="flex justify-end gap-3 pt-6 border-t border-slate-100">
             <Button variant="flat" onClick={() => setIsAddModalOpen(false)}>Cancel</Button>
-            <Button variant="gradient" onClick={handleCreateAppointment} disabled={loading || !form.icNo}>
-              {loading ? 'Submitting...' : (addTab === 'existing' ? 'Update' : 'Register')}
+            <Button 
+              variant="gradient" 
+              onClick={() => {
+                console.log("Submit clicked. Tab:", addTab, "IC:", form.icNo);
+                handleCreateAppointment();
+              }} 
+              disabled={loading || !form.icNo}
+            >
+              {loading ? 'Processing...' : (addTab === 'existing' ? 'Update' : 'Register')}
             </Button>
           </div>
         </div>
